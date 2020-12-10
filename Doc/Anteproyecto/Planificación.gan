@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?><project name="Untitled Gantt Project" company="" webLink="http://" view-date="2020-12-01" view-index="0" gantt-divider-location="492" resource-divider-location="300" version="2.8.10" locale="en_ES">
+    <description/>
+    <view zooming-state="default:9" id="gantt-chart">
+        <field id="tpd3" name="Name" width="238" order="0"/>
+        <field id="tpd4" name="Begin date" width="54" order="1"/>
+        <field id="tpd5" name="End date" width="83" order="2"/>
+        <field id="tpd8" name="Coordinator" width="111" order="3"/>
+        <option id="color.recent"><![CDATA[#0000ff #ff9900 #33ff33 #ff3333 #ffff66 #ff66ff #33ccff]]></option>
+    </view>
+    <view id="resource-table">
+        <field id="0" name="Name" width="209" order="0"/>
+        <field id="1" name="Default role" width="85" order="1"/>
+    </view>
+    <!-- -->
+    <calendars>
+        <day-types>
+            <day-type id="0"/>
+            <day-type id="1"/>
+            <default-week id="1" name="default" sun="1" mon="0" tue="0" wed="0" thu="0" fri="0" sat="1"/>
+            <only-show-weekends value="false"/>
+            <overriden-day-types/>
+            <days/>
+        </day-types>
+    </calendars>
+    <tasks empty-milestones="true">
+        <taskproperties>
+            <taskproperty id="tpd0" name="type" type="default" valuetype="icon"/>
+            <taskproperty id="tpd1" name="priority" type="default" valuetype="icon"/>
+            <taskproperty id="tpd2" name="info" type="default" valuetype="icon"/>
+            <taskproperty id="tpd3" name="name" type="default" valuetype="text"/>
+            <taskproperty id="tpd4" name="begindate" type="default" valuetype="date"/>
+            <taskproperty id="tpd5" name="enddate" type="default" valuetype="date"/>
+            <taskproperty id="tpd6" name="duration" type="default" valuetype="int"/>
+            <taskproperty id="tpd7" name="completion" type="default" valuetype="int"/>
+            <taskproperty id="tpd8" name="coordinator" type="default" valuetype="text"/>
+            <taskproperty id="tpd9" name="predecessorsr" type="default" valuetype="text"/>
+        </taskproperties>
+        <task id="0" name="Fase 1: Estado del arte detección del glioblastoma" color="#ffff66" meeting="false" start="2020-12-10" duration="2" complete="0" thirdDate="2020-11-12" thirdDate-constraint="0" expand="true">
+            <depend id="4" type="2" difference="0" hardness="Strong"/>
+            <task id="16" name="Análisis del tumor" color="#ffff66" meeting="false" start="2020-12-10" duration="2" complete="0" thirdDate="2020-12-10" thirdDate-constraint="0" expand="true"/>
+            <task id="17" name="Análisis de sistemas de detección" color="#ffff66" meeting="false" start="2020-12-10" duration="2" complete="0" thirdDate="2020-12-10" thirdDate-constraint="0" expand="true"/>
+        </task>
+        <task id="6" name="Fase 2: Selección del dataset" color="#ff66ff" meeting="false" start="2020-12-14" duration="1" complete="0" thirdDate="2020-12-16" thirdDate-constraint="0" expand="true">
+            <depend id="7" type="2" difference="0" hardness="Strong"/>
+        </task>
+        <task id="4" name="Fase 3: Análisis del problema y resolución" color="#33ccff" meeting="false" start="2020-12-15" duration="4" complete="0" thirdDate="2020-12-07" thirdDate-constraint="0" expand="true">
+            <task id="21" name="Definición del proceso de los datos" color="#33ccff" meeting="false" start="2020-12-15" duration="4" complete="0" thirdDate="2020-12-14" thirdDate-constraint="0" expand="true"/>
+            <task id="20" name="Definición de las herramientas a emplear" color="#33ccff" meeting="false" start="2020-12-18" duration="1" complete="0" thirdDate="2020-12-18" thirdDate-constraint="0" expand="true"/>
+        </task>
+        <task id="19" name="Fase 4: Aprendizaje Python" color="#ff3333" meeting="false" start="2020-12-21" duration="10" complete="0" thirdDate="2020-12-21" thirdDate-constraint="0" expand="true">
+            <depend id="7" type="2" difference="0" hardness="Strong"/>
+            <task id="22" name="Python básico" color="#ff3333" meeting="false" start="2020-12-21" duration="3" complete="0" thirdDate="2020-12-21" thirdDate-constraint="0" expand="true"/>
+            <task id="23" name="Python para imagen, ML y DL" color="#ff3333" meeting="false" start="2020-12-28" duration="5" complete="0" thirdDate="2020-12-28" thirdDate-constraint="0" expand="true"/>
+        </task>
+        <task id="7" name="Fase 5: Análisis de las imágenes médicas" color="#33ff33" meeting="false" start="2021-01-04" duration="105" complete="0" thirdDate="2020-12-21" thirdDate-constraint="0" expand="true">
+            <task id="25" name="Pre-procesamiento de imagenes" color="#33ff33" meeting="false" start="2021-01-04" duration="10" complete="0" thirdDate="2021-01-04" thirdDate-constraint="0" expand="true"/>
+            <task id="26" name="Procesamiento de imagenes (localización tumor)" color="#33ff33" meeting="false" start="2021-01-18" duration="10" complete="0" thirdDate="2021-01-18" thirdDate-constraint="0" expand="true"/>
+            <task id="27" name="Extracción de marcadores" color="#33ff33" meeting="false" start="2021-02-01" duration="20" complete="0" thirdDate="2021-02-01" thirdDate-constraint="0" expand="true">
+                <depend id="1" type="2" difference="0" hardness="Strong"/>
+            </task>
+            <task id="28" name="DeepLearning para detección (Extra)" color="#33ff33" meeting="false" start="2021-05-24" duration="5" complete="0" thirdDate="2021-05-24" thirdDate-constraint="0" expand="true"/>
+        </task>
+        <task id="10" name="Descargo parcial" color="#8cb6ce" meeting="true" start="2021-01-29" duration="0" complete="0" thirdDate="2020-12-07" thirdDate-constraint="0" expand="true"/>
+        <task id="1" name="Fase 6: Desarrollo del sistema de predicción" color="#8cb6ce" meeting="false" start="2021-03-01" duration="51" complete="0" thirdDate="2021-03-01" thirdDate-constraint="0" expand="true">
+            <depend id="3" type="2" difference="0" hardness="Strong"/>
+            <task id="30" name="Selección de parámetros poblacionales" meeting="false" start="2021-03-01" duration="5" complete="0" expand="true"/>
+            <task id="31" name="Procesamiento de los parámetros" meeting="false" start="2021-03-08" duration="10" complete="0" expand="true"/>
+            <task id="32" name="Desarrollo del sistema inteligente" meeting="false" start="2021-03-22" duration="36" complete="0" expand="true"/>
+        </task>
+        <task id="3" name="Fase 7: Validación del sistema de predicción" color="#ff9900" meeting="false" start="2021-05-11" duration="12" complete="0" thirdDate="2021-05-11" thirdDate-constraint="0" expand="true"/>
+        <task id="5" name="Fase 8: Desarrollo de la interfaz gráfica" color="#0000ff" meeting="false" start="2021-05-25" duration="11" complete="0" thirdDate="2021-05-25" thirdDate-constraint="0" expand="true"/>
+        <task id="11" name="Memoria final" color="#8cb6ce" meeting="true" start="2021-06-11" duration="0" complete="0" thirdDate="2021-06-01" thirdDate-constraint="0" expand="true"/>
+        <task id="9" name="Presentación final" color="#8cb6ce" meeting="true" start="2021-06-11" duration="0" complete="0" thirdDate="2021-06-11" thirdDate-constraint="0" expand="true"/>
+    </tasks>
+    <resources>
+        <resource id="0" name="Ainhoa" function="Default:0" contacts="" phone=""/>
+        <resource id="1" name="Edgar" function="Default:0" contacts="" phone=""/>
+    </resources>
+    <allocations>
+        <allocation task-id="0" resource-id="0" function="Default:0" responsible="true" load="100.0"/>
+        <allocation task-id="6" resource-id="0" function="Default:0" responsible="false" load="100.0"/>
+        <allocation task-id="4" resource-id="0" function="Default:0" responsible="false" load="100.0"/>
+        <allocation task-id="19" resource-id="0" function="Default:0" responsible="true" load="100.0"/>
+        <allocation task-id="7" resource-id="0" function="Default:0" responsible="true" load="100.0"/>
+        <allocation task-id="10" resource-id="0" function="Default:0" responsible="true" load="100.0"/>
+        <allocation task-id="1" resource-id="0" function="Default:0" responsible="true" load="100.0"/>
+        <allocation task-id="3" resource-id="0" function="Default:0" responsible="false" load="100.0"/>
+        <allocation task-id="5" resource-id="0" function="Default:0" responsible="true" load="100.0"/>
+        <allocation task-id="11" resource-id="0" function="Default:0" responsible="true" load="100.0"/>
+        <allocation task-id="9" resource-id="0" function="Default:0" responsible="true" load="100.0"/>
+        <allocation task-id="0" resource-id="1" function="Default:0" responsible="false" load="100.0"/>
+        <allocation task-id="6" resource-id="1" function="Default:0" responsible="true" load="100.0"/>
+        <allocation task-id="4" resource-id="1" function="Default:0" responsible="true" load="100.0"/>
+        <allocation task-id="19" resource-id="1" function="Default:0" responsible="false" load="100.0"/>
+        <allocation task-id="7" resource-id="1" function="Default:0" responsible="true" load="100.0"/>
+        <allocation task-id="10" resource-id="1" function="Default:0" responsible="true" load="100.0"/>
+        <allocation task-id="1" resource-id="1" function="Default:0" responsible="false" load="100.0"/>
+        <allocation task-id="3" resource-id="1" function="Default:0" responsible="true" load="100.0"/>
+        <allocation task-id="5" resource-id="1" function="Default:0" responsible="false" load="100.0"/>
+        <allocation task-id="11" resource-id="1" function="Default:0" responsible="true" load="100.0"/>
+        <allocation task-id="9" resource-id="1" function="Default:0" responsible="true" load="100.0"/>
+    </allocations>
+    <vacations/>
+    <previous/>
+    <roles roleset-name="Default"/>
+    <roles roleset-name="SoftwareDevelopment"/>
+</project>
