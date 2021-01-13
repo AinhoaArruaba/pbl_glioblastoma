@@ -27,6 +27,6 @@ for s in subjects:
     img = dicom_reader.extract_raw_img_array(mri_slices_dicom[s])
     # img_func.plot_hist(s, img)
     # img_func.plot_stack(s, img)
-    mri_slices_preprocessed[s] = img_func.image_preprocessing(img)
+    mri_slices_preprocessed[s] = img_func.image_preprocessing(img, True)
 
 print(subjects)
