@@ -24,7 +24,7 @@ def load_subject_scan(scan_path):
 
 def extract_raw_img_array(slices):
     ref_slice = slices[0]
-    pixel_dims = (int(ref_slice.Rows), int(ref_slice.Columns), len(slices))
+    pixel_dims = (len(slices), int(ref_slice.Rows), int(ref_slice.Columns))
     # pixel_spaces = (float(ref_slice.PixelSpacing[0]), float(
     #     ref_slice.PixelSpacing[1]), float(ref_slice.SliceThickness))
 
@@ -33,7 +33,7 @@ def extract_raw_img_array(slices):
     # loop through all the DICOM files
     for index, dcm_file in enumerate(slices):
         # store the raw image data
-        raw_images[:, :, index] = dcm_file.pixel_array
+        raw_images[index, :, :] = dcm_file.pixel_array
 
     return raw_images
 

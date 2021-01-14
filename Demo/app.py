@@ -24,9 +24,10 @@ for s in subjects:
     mri_slices_dicom[s] = dicom_reader.load_subject_scan(
         os.path.join(scan_folder[0], scan_folder[1][0]))
 
-    img = dicom_reader.extract_raw_img_array(mri_slices_dicom[s])
+    raw_img = dicom_reader.extract_raw_img_array(mri_slices_dicom[s])
     # img_func.plot_hist(s, img)
     # img_func.plot_stack(s, img)
-    mri_slices_preprocessed[s] = img_func.image_preprocessing(img, True)
+    mri_slices_preprocessed[s] = img_func.image_preprocessing(
+        raw_img, mri_slices_dicom, s, True)
 
-print(subjects)
+print('Done')

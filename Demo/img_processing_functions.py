@@ -1,119 +1,23 @@
-import matplotlib.pyplot as plt
 import numpy as np
 from skimage import morphology
 from skimage import measure
 from skimage import filters
-from sklearn.cluster import KMeans
+from skimage import exposure
+
+from medpy.filter import smoothing
 
 from scipy import ndimage
 
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+import matplotlib.pyplot as plt
+
 
 def contrast_enhancement(raw_slices):
-    pass
+    enhanced_slices = np.array(
+        [exposure.equalize_adapthist(s) for s in raw_slices])
+    return enhanced_slices
 
-
-"""
-def get_binary_slc(slc):
-    # fig, ax = filters.try_all_threshold(slc, figsize=(10, 8), verbose=False)
-    # plt.show()
-    # Thresholding with Otsu's method
-    # threshold = filters.threshold_otsu(slc)
-
-    # Thresholding method KMeans
-    row_size = slc.shape[0]
-    col_size = slc.shape[1]
-    mean = np.mean(slc)
-    std = np.std(slc)
-    slc = slc-mean
-    slc = slc/std
-    # Find the average pixel value near the lungs
-    # to renormalize washed out images
-    middle = slc[int(col_size*(1/5)):int(col_size*(4/5)),
-                 int(row_size*(1/5)):int(row_size*(4/5))]
-    mean = np.mean(middle)
-    max = np.max(slc)
-    min = np.min(slc)
-    # To improve threshold finding, I'm moving the
-    # underflow and overflow on the pixel spectrum
-    slc[slc == max] = mean
-    slc[slc == min] = mean
-    # Using Kmeans to separate foreground (soft tissue / bone) and background (lung/air)
-    kmeans = KMeans(n_clusters=2).fit(
-        np.reshape(middle, [np.prod(middle.shape), 1]))
-    centers = sorted(kmeans.cluster_centers_.flatten())
-    threshold = np.mean(centers)
-
-    # Apply threshold to obtain binary slice
-    bin_slc = slc > threshold
-
-    return bin_slc
-
-def get_brain_mask(slc, display):
-    row_size = slc.shape[0]
-    col_size = slc.shape[1]
-    thresh_slc = get_binary_slc(slc)
-    # Erode binary image
-    eroded = morphology.erosion(thresh_slc, np.ones([5, 5]))
-    # Extract 2 largest BLOB
-    object_labels = measure.label(eroded)
-    labels = []
-    # unique_labels = np.unique(object_labels)
-    regions = measure.regionprops(object_labels)
-    regions.sort(key=lambda region: region.area, reverse=True)
-    # bbox values -> (min_row, min_col, max_row, max_col)
-    # for region in regions:
-    #     region_bbox = region.bbox
-    #     if region_bbox[3]-region_bbox[1] < col_size*(8.5/10) and region_bbox[3] < col_size*(8.5/10):
-    #         labels.append(region.label)
-    # mask = np.ndarray([row_size, col_size], dtype=np.int8)
-    # mask[:] = 0
-    # for label in labels:
-    #     mask = mask + np.where(object_labels == label, 1, 0)
-
-    # # Extract the largest BLOB
-    mask = np.ndarray([slc.shape[0], slc.shape[1]], dtype=np.int16)
-    mask[:] = 0
-    mask = mask + np.where(object_labels == regions[0].label, 1, 0)
-    # Erode binary image
-    mask_eroded = morphology.erosion(mask, np.ones([3, 3]))
-    # Fill binary image
-    mask_filled = ndimage.binary_fill_holes(mask_eroded)
-    # Dilate the binary image
-    mask_final = morphology.dilation(mask_filled, np.ones([8, 8]))
-    # mask_final = np.logical_not(mask_final).astype(int)
-    if display:
-        fig, ax = plt.subplots(2, 3, figsize=[9, 9])
-        ax[0, 0].set_title("Original")
-        ax[0, 0].imshow(slc, cmap='gray')
-        ax[0, 0].axis('off')
-        ax[0, 1].set_title("Threshold")
-        ax[0, 1].imshow(thresh_slc, cmap='gray')
-        ax[0, 1].axis('off')
-        ax[0, 2].set_title("After Erosion")
-        ax[0, 2].imshow(eroded, cmap='gray')
-        ax[0, 2].axis('off')
-        ax[1, 0].set_title("Color Labels")
-        ax[1, 0].imshow(object_labels)
-        ax[1, 0].axis('off')
-        ax[1, 1].set_title("Final Mask")
-        ax[1, 1].imshow(mask_final, cmap='gray')
-        ax[1, 1].axis('off')
-        ax[1, 2].set_title("Apply Mask on Original")
-        ax[1, 2].imshow(mask_final*slc, cmap='gray')
-        ax[1, 2].axis('off')
-
-        plt.show()
-
-    return 1
-
-def skull_strip(raw_slices):
-    no_skull_slices = []
-    for index in range(raw_slices.shape[2]):
-        mask = get_brain_mask(raw_slices[:, :, index], True)
-        no_skull_slices.append(mask*raw_slices[:, :, index])
-
-    return no_skull_slices
-"""
+# S3 Skull stripping algorithm implementation for 2D brain MRI
 
 
 def get_brain_mask_s3(img, display=False):
@@ -202,18 +106,138 @@ def get_brain_mask_s3(img, display=False):
     return 1
 
 
-def skull_strip_s3(raw_slices, display):
+def skull_strip_s3_algorithm(raw_slices, display):
     no_skull_slices = []
-    for index in range(raw_slices.shape[2]):
-        mask = get_brain_mask_s3(raw_slices[:, :, index], display)
-        no_skull_slices.append(mask*raw_slices[:, :, index])
+    for index in range(raw_slices.shape[0]):
+        mask = get_brain_mask_s3(raw_slices[index, :, :], display)
+        no_skull_slices.append(mask*raw_slices[index, :, :])
+
+    return no_skull_slices
+
+# Skull stripping algorithm implementation for 3D brain MRI based in McStrip algorithm
+
+
+def get_brain_coarse_mask(raw_slices, display=False):
+    coarse_masks = []
+    # Thresholding with Otsu's method
+    threshold = filters.threshold_mean(raw_slices)
+    # Apply threshold to obtain binary slice
+    for index in enumerate(raw_slices):
+        coarse_masks.append(raw_slices[index[0], :, :] > threshold)
+    coarse_masks = ndimage.binary_fill_holes(coarse_masks)
+
+    if display:
+        plot_stack('', np.array(coarse_masks))
+
+    return np.array(coarse_masks)
+
+
+def get_brain_thresh_mask(raw_slices, coarse_masks, display=False):
+    thresh_masks = []
+    # lv1_filtered_slices = np.array([raw_slices[index[0], :, :] *
+    #                                 coarse_masks[index[0], :, :] for index in enumerate(raw_slices)])
+    # Thresholding with Multi-Otsu's method
+    thresholds = filters.threshold_multiotsu(raw_slices, classes=4)
+    # Apply threshold to obtain binary slice
+    for index in enumerate(raw_slices):
+        thresh_masks.append(np.logical_and(np.array(raw_slices[index[0], :, :] < thresholds[2]), np.array(
+            raw_slices[index[0], :, :] > thresholds[0])))
+
+    thresh_masks = ndimage.binary_fill_holes(thresh_masks)
+
+    if display:
+        # plot_hist_thresholds(raw_slices[14, :, :], thresholds)
+        # plot_stack('', np.array(lv1_filtered_slices))
+        plot_stack('Thresh mask', np.array(thresh_masks))
+
+    return np.array(thresh_masks)
+
+
+def get_brain_bse_mask(raw_slices, coarse_masks, thresh_mask, display=False):
+    # http://brainsuite.org/processing/surfaceextraction/bse/
+    # Apply anisotropic difussion filter
+    # slices_filtered_anisotropic = np.array([smoothing.anisotropic_diffusion(
+    #     raw_slices[index[0], :, :]) for index in enumerate(raw_slices)])
+    lv2_filtered_slices = np.array(
+        [raw_slices[index[0], :, :] * thresh_mask[index[0], :, :] for index in enumerate(raw_slices)])
+
+    slices_filtered_anisotropic = np.array(smoothing.anisotropic_diffusion(
+        lv2_filtered_slices))
+    # Apply Marr-Hildreth filtering algorithm (laplacian of gaussian filter)
+    # slices_filtered_log = [ndimage.gaussian_laplace(
+    #     slices_filtered_anisotropic[index[0], :, :], 0.5) for index in enumerate(slices_filtered_anisotropic)]
+    slices_filtered_log = ndimage.gaussian_laplace(
+        slices_filtered_anisotropic, 0.5)
+    # slices_eroded = [morphology.erosion(slices_filtered_log[index[0], :, :], np.ones(
+    #     [5, 5])) for index in enumerate(slices_filtered_log)]
+    slices_eroded = morphology.erosion(
+        slices_filtered_log, selem=np.ones([1, 1, 1]))
+    slices_binary = slices_eroded < 0
+    slices_eroded = morphology.erosion(slices_binary, selem=np.ones([5, 5, 5]))
+    all_labels = measure.label(slices_eroded)
+    regions = measure.regionprops(all_labels)
+    regions.sort(key=lambda region: region.area, reverse=True)
+    bse_masks = np.ndarray(
+        [raw_slices.shape[0], raw_slices.shape[1], raw_slices.shape[2]], dtype=np.int8)
+    bse_masks[::] = 0
+    bse_masks = bse_masks + np.where(all_labels == regions[0].label, 1, 0)
+    bse_masks_dilated = morphology.dilation(
+        bse_masks, selem=np.ones([7, 7, 7]))
+    bse_masks = ndimage.binary_fill_holes(bse_masks_dilated)
+    bse_masks = ndimage.binary_fill_holes(bse_masks)
+    bse_masks = ndimage.binary_fill_holes(bse_masks)
+    if display:
+        # plot_stack('Anisotropic', slices_filtered_anisotropic)
+        # plot_stack('LoG', slices_filtered_log)
+        # plot_stack('Binary', slices_binary)
+        plot_stack('BSE Eroded', slices_eroded)
+        # plot_stack('Labels', all_labels)
+        plot_stack('BSE mask', bse_masks)
+
+    return bse_masks
+
+
+def get_consensus_mask(coarse_masks, thresh_masks, bse_masks, display=False):
+    consensus_mask = coarse_masks
+    for index in range(coarse_masks.shape[0]):
+        for row in range(coarse_masks.shape[1]):
+            for col in range(coarse_masks.shape[2]):
+                if (coarse_masks[index, row, col] and thresh_masks[index, row, col]) or (coarse_masks[index, row, col] and bse_masks[index, row, col]) or (thresh_masks[index, row, col] and bse_masks[index, row, col]):
+                    consensus_mask[index, row, col] = True
+                else:
+                    consensus_mask[index, row, col] = False
+
+    if display:
+        plot_stack('Consensus mask', consensus_mask)
+
+    return consensus_mask
+
+
+def skull_strip_mcstrip_algorithm(raw_slices, display=False):
+    coarse_masks = get_brain_coarse_mask(raw_slices, display=False)
+    thresh_masks = get_brain_thresh_mask(
+        raw_slices, coarse_masks, display=True)
+    bse_masks = get_brain_bse_mask(
+        raw_slices, coarse_masks, thresh_masks, display=True)
+    # brain_masks = get_consensus_mask(
+    #     coarse_masks, thresh_masks, bse_masks, display=False)
+
+    no_skull_slices = []
+    for index in range(raw_slices.shape[0]):
+        no_skull_slices.append(
+            bse_masks[index, :, :]*raw_slices[index, :, :])
+
+    if display:
+        plot_stack('Mask', bse_masks)
+        plot_stack('Masked brain', np.array(no_skull_slices))
 
     return no_skull_slices
 
 
-def image_preprocessing(raw_slices, display):
-    contrast_enhancement(raw_slices)
-    no_skull_slices = skull_strip_s3(raw_slices, display)
+def image_preprocessing(raw_slices, dicom_data, subject, display):
+    enhanced_slices = contrast_enhancement(raw_slices)
+
+    no_skull_slices = skull_strip_mcstrip_algorithm(enhanced_slices, display)
 
     return no_skull_slices
 
@@ -226,14 +250,34 @@ def plot_hist(subject, imgs):
     plt.show()
 
 
+def plot_hist_thresholds(img, thresholds):
+    # Using the threshold values, we generate the three regions.
+    regions = np.digitize(img, bins=thresholds)
+    fig, ax = plt.subplots(nrows=1, ncols=3, figsize=(10, 3.5))
+
+    ax[0].imshow(img, cmap='gray')
+    ax[0].set_title('Original')
+    ax[0].axis('off')
+
+    ax[1].hist(img.ravel(), bins=255)
+    ax[1].set_title('Histogram')
+    for thresh in thresholds:
+        ax[1].axvline(thresh, color='r')
+
+    ax[2].imshow(regions, cmap='jet')
+    ax[2].set_title('Multi-Otsu result')
+    ax[2].axis('off')
+    plt.show()
+
+
 def plot_stack(subject, img, rows=6, cols=4, start_with=0, show_every=1):
     fig, ax = plt.subplots(rows, cols, figsize=[12, 12])
     for i in range(rows*cols):
         ind = start_with + i*show_every
-        if ind < img.shape[2]:
+        if ind < img.shape[0]:
             ax[int(i/cols), int(i % cols)].set_title('slice %d' %
                                                      ind, fontsize=7)
-            ax[int(i/cols), int(i % cols)].imshow(img[:, :, ind], cmap='gray')
+            ax[int(i/cols), int(i % cols)].imshow(img[ind, :, :], cmap='gray')
         ax[int(i/cols), int(i % cols)].axis('off')
 
     fig.suptitle(subject)
@@ -244,4 +288,30 @@ def plot_img(subject, img):
     plt.imshow(img, cmap='gray')
     plt.title(subject)
     plt.axis('off')
+    plt.show()
+
+
+def make_mesh(image, threshold=-300, step_size=1):
+    p = image.transpose(2, 1, 0)
+    verts, faces, norm, val = measure.marching_cubes(
+        p, step_size=step_size, allow_degenerate=True)
+    return verts, faces
+
+
+def plot_3d(image, threshold=-300, step_size=1):
+    verts, faces = make_mesh(image)
+    x, y, z = zip(*verts)
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(111, projection='3d')
+
+    # Fancy indexing: `verts[faces]` to generate a collection of triangles
+    mesh = Poly3DCollection(verts[faces], linewidths=0.05, alpha=1)
+    face_color = [1, 1, 0.9]
+    mesh.set_facecolor(face_color)
+    ax.add_collection3d(mesh)
+
+    ax.set_xlim(0, max(x))
+    ax.set_ylim(0, max(y))
+    ax.set_zlim(0, max(z))
+    # ax.set_axis_bgcolor((0.7, 0.7, 0.7))
     plt.show()
