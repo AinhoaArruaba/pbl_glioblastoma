@@ -156,42 +156,42 @@ def get_brain_thresh_mask(raw_slices, coarse_masks, display=False):
 def get_brain_bse_mask(raw_slices, coarse_masks, thresh_mask, display=False):
     # http://brainsuite.org/processing/surfaceextraction/bse/
     # Apply anisotropic difussion filter
-    # slices_filtered_anisotropic = np.array([smoothing.anisotropic_diffusion(
-    #     raw_slices[index[0], :, :]) for index in enumerate(raw_slices)])
     lv2_filtered_slices = np.array(
         [raw_slices[index[0], :, :] * thresh_mask[index[0], :, :] for index in enumerate(raw_slices)])
-
     slices_filtered_anisotropic = np.array(smoothing.anisotropic_diffusion(
         lv2_filtered_slices))
     # Apply Marr-Hildreth filtering algorithm (laplacian of gaussian filter)
-    # slices_filtered_log = [ndimage.gaussian_laplace(
-    #     slices_filtered_anisotropic[index[0], :, :], 0.5) for index in enumerate(slices_filtered_anisotropic)]
     slices_filtered_log = ndimage.gaussian_laplace(
         slices_filtered_anisotropic, 0.5)
-    # slices_eroded = [morphology.erosion(slices_filtered_log[index[0], :, :], np.ones(
-    #     [5, 5])) for index in enumerate(slices_filtered_log)]
-    slices_eroded = morphology.erosion(
-        slices_filtered_log, selem=np.ones([1, 1, 1]))
-    slices_binary = slices_eroded < 0
-    slices_eroded = morphology.erosion(slices_binary, selem=np.ones([5, 5, 5]))
+
+    slices_binary = slices_filtered_log < 0
+    slices_eroded = morphology.erosion(slices_binary, morphology.cube(7))
     all_labels = measure.label(slices_eroded)
     regions = measure.regionprops(all_labels)
     regions.sort(key=lambda region: region.area, reverse=True)
     bse_masks = np.ndarray(
         [raw_slices.shape[0], raw_slices.shape[1], raw_slices.shape[2]], dtype=np.int8)
     bse_masks[::] = 0
-    bse_masks = bse_masks + np.where(all_labels == regions[0].label, 1, 0)
-    bse_masks_dilated = morphology.dilation(
-        bse_masks, selem=np.ones([7, 7, 7]))
-    bse_masks = ndimage.binary_fill_holes(bse_masks_dilated)
-    bse_masks = ndimage.binary_fill_holes(bse_masks)
-    bse_masks = ndimage.binary_fill_holes(bse_masks)
+    region_masks = bse_masks + np.where(all_labels == regions[0].label, 1, 0)
+    region_masks_dilated = morphology.dilation(
+        region_masks, morphology.cube(3))
+
+    for index in range(region_masks_dilated.shape[0]):
+        bse_masks[index, :, :] = ndimage.binary_fill_holes(
+            region_masks_dilated[index, :, :])
+
+    for r in range(4):
+        bse_masks = morphology.dilation(bse_masks, morphology.cube(1))
+        bse_masks = ndimage.binary_fill_holes(bse_masks)
+        bse_masks = morphology.closing(bse_masks, morphology.ball(4))
+        bse_masks = morphology.erosion(bse_masks, morphology.cube(1))
+
+    for r in range(2):
+        for index in range(bse_masks.shape[0]):
+            bse_masks[index, :, :] = ndimage.binary_fill_holes(
+                bse_masks[index, :, :])
+
     if display:
-        # plot_stack('Anisotropic', slices_filtered_anisotropic)
-        # plot_stack('LoG', slices_filtered_log)
-        # plot_stack('Binary', slices_binary)
-        plot_stack('BSE Eroded', slices_eroded)
-        # plot_stack('Labels', all_labels)
         plot_stack('BSE mask', bse_masks)
 
     return bse_masks
@@ -216,7 +216,7 @@ def get_consensus_mask(coarse_masks, thresh_masks, bse_masks, display=False):
 def skull_strip_mcstrip_algorithm(raw_slices, display=False):
     coarse_masks = get_brain_coarse_mask(raw_slices, display=False)
     thresh_masks = get_brain_thresh_mask(
-        raw_slices, coarse_masks, display=True)
+        raw_slices, coarse_masks, display=False)
     bse_masks = get_brain_bse_mask(
         raw_slices, coarse_masks, thresh_masks, display=True)
     # brain_masks = get_consensus_mask(
@@ -228,16 +228,15 @@ def skull_strip_mcstrip_algorithm(raw_slices, display=False):
             bse_masks[index, :, :]*raw_slices[index, :, :])
 
     if display:
-        plot_stack('Mask', bse_masks)
         plot_stack('Masked brain', np.array(no_skull_slices))
 
     return no_skull_slices
 
 
 def image_preprocessing(raw_slices, dicom_data, subject, display):
-    enhanced_slices = contrast_enhancement(raw_slices)
+    # enhanced_slices = contrast_enhancement(raw_slices)
 
-    no_skull_slices = skull_strip_mcstrip_algorithm(enhanced_slices, display)
+    no_skull_slices = skull_strip_mcstrip_algorithm(raw_slices, display)
 
     return no_skull_slices
 
@@ -270,7 +269,7 @@ def plot_hist_thresholds(img, thresholds):
     plt.show()
 
 
-def plot_stack(subject, img, rows=6, cols=4, start_with=0, show_every=1):
+def plot_stack(subject, img, rows=6, cols=4, start_with=0, show_every=7):
     fig, ax = plt.subplots(rows, cols, figsize=[12, 12])
     for i in range(rows*cols):
         ind = start_with + i*show_every

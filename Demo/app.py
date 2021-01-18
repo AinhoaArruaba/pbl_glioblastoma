@@ -9,6 +9,7 @@ import img_processing_functions as img_func
 # Python libraries
 import os
 
+
 # Read database data
 database_path = os.path.join(os.path.dirname(
     os.path.abspath(__file__)), "database")
