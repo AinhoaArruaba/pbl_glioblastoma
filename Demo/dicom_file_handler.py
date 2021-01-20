@@ -71,6 +71,26 @@ def get_subject_list(path):
     return subjects
 
 
+def write_dicom(new_img, dicom_data, folder, s):
+    # Create new folder for new slices
+    dir_path = os.path.join(os.path.dirname(
+        os.path.abspath(__file__)), 'database_noskull')
+    if not os.path.exists(dir_path):
+        os.mkdir(dir_path)
+    dir_path = os.path.join(dir_path, s)
+    if not os.path.exists(dir_path):
+        os.mkdir(dir_path)
+    dir_path = os.path.join(dir_path, folder)
+    if not os.path.exists(dir_path):
+        os.mkdir(dir_path)
+
+    new_dicom_data = dicom_data
+    new_img = np.array(new_img)
+    for index, slc in enumerate(new_dicom_data):
+        slc.PixelData = new_img[index, :, :]
+        slc.save_as(os.path.join(dir_path, os.path.basename(slc.filename)))
+
+
 if __name__ == "__main__":
     base_path = "/Users/ainhoaarruabarrenaortiz/Documents/Master/PBL/Datasets/Data/CPTAC-GBM"
     subjects = [os.path.join(base_path, subject)
