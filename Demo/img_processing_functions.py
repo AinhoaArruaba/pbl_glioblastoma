@@ -1,4 +1,4 @@
-from utils import img_utils
+import utils.img_utils as img_utils
 
 import numpy as np
 from skimage import morphology
@@ -37,9 +37,9 @@ def __get_brain_thresh_mask(raw_slices, coarse_masks):
     lv1_filtered_slices = apply_mask(raw_slices, coarse_masks)
     thresholds = filters.threshold_multiotsu(lv1_filtered_slices, classes=5)
 
-    coarse_masks = morphology.erosion(coarse_masks, morphology.ball(1))
+    coarse_masks_eroded = morphology.erosion(coarse_masks, morphology.ball(1))
 
-    all_labels = measure.label(coarse_masks)
+    all_labels = measure.label(coarse_masks_eroded)
     regions = measure.regionprops(all_labels)
     regions.sort(key=lambda region: region.area, reverse=True)
     region_masks = np.ndarray(
@@ -117,10 +117,10 @@ def __get_brain_bse_mask(raw_slices, coarse_masks, thresh_mask):
 
 
 def __get_consensus_mask(coarse_masks, thresh_masks, bse_masks):
-    consensus_mask = coarse_masks
-    for index in range(coarse_masks.shape[0]):
-        for row in range(coarse_masks.shape[1]):
-            for col in range(coarse_masks.shape[2]):
+    consensus_mask = np.empty(coarse_masks.shape, dtype=bool)
+    for index in range(consensus_mask.shape[0]):
+        for row in range(consensus_mask.shape[1]):
+            for col in range(consensus_mask.shape[2]):
                 if (coarse_masks[index, row, col] and bse_masks[index, row, col]) or (thresh_masks[index, row, col] and bse_masks[index, row, col]) or (thresh_masks[index, row, col] and coarse_masks[index, row, col]):
                     consensus_mask[index, row, col] = True
                 else:
@@ -136,13 +136,16 @@ def __skull_strip_mcstrip_algorithm(raw_slices, display=False):
     consensus_mask = __get_consensus_mask(
         coarse_masks, thresh_masks, bse_masks)
 
+    mask_dict = {"consensus": consensus_mask, "coarse": coarse_masks,
+                 "threshold": thresh_masks, "bse": bse_masks}
+
     if display:
         img_utils.plot_stack('Coarse mask', coarse_masks)
         img_utils.plot_stack('Thresh mask', thresh_masks)
         img_utils.plot_stack('BSE mask', bse_masks)
         img_utils.plot_stack('Consensus mask', consensus_mask)
 
-    return consensus_mask
+    return mask_dict
 
 
 def apply_mask(raw_slices, mask):
@@ -153,16 +156,17 @@ def apply_mask(raw_slices, mask):
     return np.array(masked_slices)
 
 
-def image_preprocessing(raw_slices, dicom_data, display):
+def image_preprocessing(raw_slices, dicom_data, display=False):
     enhanced_slices = __contrast_enhancement(raw_slices)
 
-    no_skull_mask = __skull_strip_mcstrip_algorithm(enhanced_slices, display)
-    no_skull_slices = apply_mask(enhanced_slices, no_skull_mask)
-    return no_skull_mask, no_skull_slices
+    masks = __skull_strip_mcstrip_algorithm(enhanced_slices, display)
+
+    no_skull_slices = apply_mask(raw_slices, masks["consensus"])
+    return masks, no_skull_slices
 
 
-def image_preprocessing_brainweb(raw_slices, display):
-    no_skull_mask = __skull_strip_mcstrip_algorithm(raw_slices, display)
-    no_skull_slices = apply_mask(raw_slices, no_skull_mask)
+def image_preprocessing_brainweb(raw_slices, display=False):
+    masks = __skull_strip_mcstrip_algorithm(raw_slices, display)
 
-    return no_skull_mask, no_skull_slices
+    no_skull_slices = apply_mask(raw_slices, masks["consensus"])
+    return masks, no_skull_slices

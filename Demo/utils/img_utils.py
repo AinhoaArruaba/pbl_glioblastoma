@@ -35,11 +35,44 @@ def plot_stack(subject, img, rows=6, cols=4, start_with=0):
     fig, ax = plt.subplots(rows, cols, figsize=[12, 12])
     for i in range(rows*cols):
         ind = start_with + i*show_every
-        if ind < img.shape[0]:
-            ax[int(i/cols), int(i % cols)].set_title('slice %d' %
-                                                     ind, fontsize=7)
-            ax[int(i/cols), int(i % cols)].imshow(img[ind, :, :], cmap='gray')
-        ax[int(i/cols), int(i % cols)].axis('off')
+        if rows != 1:
+            if ind < img.shape[0]:
+                ax[int(i/cols), int(i % cols)].set_title('slice %d' %
+                                                         ind, fontsize=7)
+                ax[int(i/cols), int(i % cols)
+                   ].imshow(img[ind, :, :], cmap='gray')
+
+            ax[int(i/cols), int(i % cols)].axis('off')
+        else:
+            if ind < img.shape[0]:
+                ax[ind].set_title('slice %d' % ind, fontsize=7)
+                ax[ind].imshow(img[ind, :, :], cmap='gray')
+
+            ax[ind].axis('off')
+
+    fig.suptitle(subject)
+    plt.show()
+
+
+def plot_stack_documentation_img(subject, img, titles, rows=6, cols=4, start_with=0):
+    show_every = int(img.shape[0]/(rows*cols))
+    fig, ax = plt.subplots(rows, cols, figsize=[12, 12])
+    for i in range(rows*cols):
+        ind = start_with + i*show_every
+        if rows != 1:
+            if ind < img.shape[0]:
+                ax[int(i/cols), int(i % cols)
+                   ].set_title(titles[ind], fontsize=7)
+                ax[int(i/cols), int(i % cols)
+                   ].imshow(img[ind, :, :], cmap='gray')
+
+            ax[int(i/cols), int(i % cols)].axis('off')
+        else:
+            if ind < img.shape[0]:
+                ax[int(i % cols)].set_title(titles[ind], fontsize=7)
+                ax[int(i % cols)].imshow(img[ind, :, :], cmap='gray')
+
+            ax[int(i % cols)].axis('off')
 
     fig.suptitle(subject)
     plt.show()
