@@ -83,3 +83,10 @@ def plot_img(subject, img):
     plt.title(subject)
     plt.axis('off')
     plt.show()
+
+
+def scale_range(input, min, max):
+    input += -(np.min(input))
+    input /= np.max(input) / (max - min)
+    input += min
+    return input

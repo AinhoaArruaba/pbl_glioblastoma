@@ -11,7 +11,7 @@ from medpy.filter import smoothing
 from scipy import ndimage
 
 
-def __contrast_enhancement(raw_slices):
+def contrast_enhancement(raw_slices):
     enhanced_slices = np.array(
         [exposure.equalize_adapthist(s) for s in raw_slices])
     return enhanced_slices
@@ -126,6 +126,11 @@ def __get_consensus_mask(coarse_masks, thresh_masks, bse_masks):
                 else:
                     consensus_mask[index, row, col] = False
 
+    # Fill holes mask
+    for index in range(consensus_mask.shape[0]):
+        consensus_mask[index, :, :] = ndimage.binary_fill_holes(
+            consensus_mask[index, :, :])
+
     return consensus_mask
 
 
@@ -157,7 +162,7 @@ def apply_mask(raw_slices, mask):
 
 
 def image_preprocessing(raw_slices, dicom_data, display=False):
-    enhanced_slices = __contrast_enhancement(raw_slices)
+    enhanced_slices = contrast_enhancement(raw_slices)
 
     masks = __skull_strip_mcstrip_algorithm(enhanced_slices, display)
 
