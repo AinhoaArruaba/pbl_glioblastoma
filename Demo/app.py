@@ -4,7 +4,7 @@ app.py
 """
 # Developed modules
 import dicom_file_handler as dicom_handler
-import segmentation
+import segmentation as seg
 import img_processing_functions as img_func
 # Python libraries
 import os
@@ -18,6 +18,7 @@ subjects = dicom_handler.get_subject_list(database_path)
 
 mri_slices_dicom = {}
 mri_slices_preprocessed = {}
+mri_slices_segmented = {}
 for s in subjects:
     scan_folder = dicom_handler.identify_scan_folder(
         os.path.join(database_path, s))
@@ -32,6 +33,9 @@ for s in subjects:
 
         mri_slices_preprocessed[s] = img_func.image_preprocessing(
             raw_img, mri_slices_dicom, True)
+
+        mri_slices_segmented[s] = seg.segmentation(
+            mri_slices_preprocessed[s], True)
 
         # dicom_handler.write_dicom(
         #     mri_slices_preprocessed[s], mri_slices_dicom[subject_folder], folder, s)
