@@ -31,7 +31,7 @@ for s in subjects:
             mri_slices_dicom[subject_folder])
 
         mri_slices_preprocessed[s] = img_func.image_preprocessing(
-            raw_img, mri_slices_dicom, False)
+            raw_img, mri_slices_dicom, True)
 
         # dicom_handler.write_dicom(
         #     mri_slices_preprocessed[s], mri_slices_dicom[subject_folder], folder, s)

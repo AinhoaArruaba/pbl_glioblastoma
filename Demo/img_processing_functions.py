@@ -101,7 +101,7 @@ def __get_brain_bse_mask(raw_slices, coarse_masks, thresh_mask):
     bse_masks[::] = 0
     region_masks = bse_masks + np.where(all_labels == regions[0].label, 1, 0)
     region_masks_dilated = morphology.dilation(
-        region_masks, morphology.ball(1))
+        region_masks, morphology.ball(2))
 
     bse_masks = ndimage.binary_fill_holes(region_masks_dilated)
     for _ in range(4):
