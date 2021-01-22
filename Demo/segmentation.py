@@ -32,26 +32,26 @@ def segmentation(mri_slices_preprocessed, display):
         maxMu = max(gm_means[maxInd])
 
         # Greyscale morphological reconstruction
-        markerImage = currentSlice - maxMu
-        slice_rec = morphology.reconstruction(markerImage, currentSlice)
+        seedImage = currentSlice - maxMu
+        slice_rec = morphology.reconstruction(seedImage, currentSlice)
         slice_subs = currentSlice - slice_rec # get local maximas
 
         # Binary adaptive thresholding
-        slice_subs_vector = np.array(slice_subs.flatten())
-        slice_subs_transposed = np.array([slice_subs_vector])
-        slice_subs_transposed = slice_subs_transposed.T
-        gm = GaussianMixture(n_components=noOfGaussians, random_state=0, n_init=3).fit(slice_subs_transposed)
-        gm_means = np.array(gm.means_).flatten()
-        gm_covariances = np.array(gm.covariances_).flatten()
+        #slice_subs_vector = np.array(slice_subs.flatten())
+        #slice_subs_transposed = np.array([slice_subs_vector])
+        #slice_subs_transposed = slice_subs_transposed.T
+        #gm = GaussianMixture(n_components=noOfGaussians, random_state=0, n_init=3).fit(slice_subs_transposed)
+        #gm_means = np.array(gm.means_).flatten()
+        #gm_covariances = np.array(gm.covariances_).flatten()
         
-        maxV = np.max(gm_covariances)
-        maxInd = np.where(gm_covariances == maxV)
-        maxMu = max(gm_means[maxInd])
+        #maxV = np.max(gm_covariances)
+        #maxInd = np.where(gm_covariances == maxV)
+        #maxMu = max(gm_means[maxInd])
 
-        SubstractConst = np.percentile(slice_subs, percentil) - maxMu
+        SubstractConst = np.percentile(currentSlice, percentil) - maxMu
         binary_slice = slice_subs > SubstractConst
 
-        # region with maximum mean intensity is marked as tumor
+        # region with maximum mean intensity is marked as tumour
         binary_slice_dil = morphology.dilation(binary_slice, morphology.square(4))
         binary_slice_er = morphology.erosion(binary_slice_dil, morphology.square(3))
 

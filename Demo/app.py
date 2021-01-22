@@ -32,7 +32,7 @@ for s in subjects:
             mri_slices_dicom[subject_folder])
 
         mri_slices_preprocessed[s] = img_func.image_preprocessing(
-            raw_img, mri_slices_dicom, True)
+            raw_img, mri_slices_dicom, False)
 
         mri_slices_segmented[s] = seg.segmentation(
             mri_slices_preprocessed[s], True)
