@@ -75,40 +75,40 @@ def calc_metrics(subject_id, masks, ground_truth_mask):
     return [subject_id, tpr, fpr, fnr, jaccard]
 
 
-# For each subject in eval_database
-#   Load brain volume
-#   Load available mask
-#   Compute mask with implemented mcstrip algorithm
-#   Compute selected metrics and save
-# Create CSV file with obtained metric values
-# Generate comparation figure with 3 subjects ??
+if __name__ == "__main__":
+    # For each subject in eval_database
+    #   Load brain volume
+    #   Load available mask
+    #   Compute mask with implemented mcstrip algorithm
+    #   Compute selected metrics and save
+    # Create CSV file with obtained metric values
+    # Generate comparation figure with 3 subjects ??
 
+    # READ DATABASE
+    eval_database_path = os.path.join(os.path.dirname(
+        os.path.abspath(__file__)), "database_eval")
+    subject_path_list = [os.path.join(eval_database_path, folder) for folder in os.listdir(
+        eval_database_path) if os.path.isdir(os.path.join(eval_database_path, folder))]
+    subject_path_list.sort()
 
-# READ DATABASE
-eval_database_path = os.path.join(os.path.dirname(
-    os.path.abspath(__file__)), "database_eval")
-subject_path_list = [os.path.join(eval_database_path, folder) for folder in os.listdir(
-    eval_database_path) if os.path.isdir(os.path.join(eval_database_path, folder))]
-subject_path_list.sort()
+    metrics = []
+    for subject_path in subject_path_list:
+        subject_id = os.path.basename(subject_path)
+        print(subject_id)
+        # Read brain volume
+        subject_img = load_subject_data(subject_path)
+        # Read brain mask
+        subject_brainmask_ground_truth = load_subject_data(
+            subject_path, mask=True)
+        # Compute brain mask with McStrip algorithm
+        subject_brainmasks_mcstrip,  subject_masked_slices = img_func.image_preprocessing(
+            subject_img)
+        # img_utils.plot_stack(subject_id, subject_masked_slices)
+        metrics.append(calc_metrics(
+            subject_id, subject_brainmasks_mcstrip, subject_brainmask_ground_truth))
 
-metrics = []
-for subject_path in subject_path_list:
-    subject_id = os.path.basename(subject_path)
-    print(subject_id)
-    # Read brain volume
-    subject_img = load_subject_data(subject_path)
-    # Read brain mask
-    subject_brainmask_ground_truth = load_subject_data(
-        subject_path, mask=True)
-    # Compute brain mask with McStrip algorithm
-    subject_brainmasks_mcstrip,  subject_masked_slices = img_func.image_preprocessing(
-        subject_img)
-    # img_utils.plot_stack(subject_id, subject_masked_slices)
-    metrics.append(calc_metrics(
-        subject_id, subject_brainmasks_mcstrip, subject_brainmask_ground_truth))
+    with open("evaluation_results.csv", "w") as csv_file:
+        writer = csv.writer(csv_file)
+        writer.writerows(metrics)
 
-with open("evaluation_results.csv", "w") as csv_file:
-    writer = csv.writer(csv_file)
-    writer.writerows(metrics)
-
-print(metrics)
+    print(metrics)

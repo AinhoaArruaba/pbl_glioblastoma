@@ -3,16 +3,17 @@ import numpy as np
 import nibabel as nib
 import utils.img_utils as img_utils
 import img_processing_functions as img_func
+import evaluation_script
 
-
-image_data_t1 = nib.load(os.path.join(os.path.dirname(
-    os.path.abspath(__file__)), 'brainweb', 't1_icbm_normal_1mm_pn3_rf20.mnc'))
-raw_images = image_data_t1.get_fdata()
-mask_t1, slices = img_func.image_preprocessing_brainweb(raw_images, False)
-n_slc = 45
+eval_database_path = os.path.join(os.path.dirname(
+    os.path.abspath(__file__)), "database_eval", "IBSR_04")
+raw_images = evaluation_script.load_subject_data(eval_database_path)
+mask_t1,  _ = img_func.image_preprocessing(
+    raw_images)
 
 # Generate plots
 # Lv 1
+n_slc = 120
 coarse_mask = mask_t1["coarse"]
 coarse_masked_slices = img_func.apply_mask(raw_images, coarse_mask)
 figuras_plot_lv1 = np.zeros((3, coarse_mask.shape[1], coarse_mask.shape[2]))
