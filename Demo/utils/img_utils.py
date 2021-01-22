@@ -90,3 +90,32 @@ def scale_range(input, min, max):
     input /= np.max(input) / (max - min)
     input += min
     return input
+
+def display_seg_results(currentSlice, slice_subs, binary_slice, tumor_mask, tumor_mask_final, segmented_tumor):
+    _, ax = plt.subplots(nrows=2, ncols=3, figsize=(40))
+
+    ax[0].imshow(currentSlice, cmap='gray')
+    ax[0].set_title('Original')
+    ax[0].axis('off')
+
+    ax[1].imshow(slice_subs, cmap='gray')
+    ax[1].set_title('Morphological reconstruction')
+    ax[1].axis('off')
+
+    ax[2].imshow(binary_slice, cmap='gray')
+    ax[2].set_title('Binary thresholding')
+    ax[2].axis('off')
+
+    ax[3].imshow(tumor_mask, cmap='gray')
+    ax[3].set_title('Tumor region')
+    ax[3].axis('off')
+
+    ax[4].imshow(tumor_mask_final, cmap='gray')
+    ax[4].set_title('Final tumor mask')
+    ax[4].axis('off')
+
+    ax[5].imshow(segmented_tumor, cmap='gray')
+    ax[5].set_title('Segmented tumor')
+    ax[5].axis('off')
+
+    plt.show()
