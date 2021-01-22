@@ -13,7 +13,7 @@ from scipy import ndimage
 
 def contrast_enhancement(raw_slices):
     enhanced_slices = np.array(
-        [exposure.equalize_adapthist(s) for s in raw_slices])
+        [exposure.equalize_adapthist(s, nbins=np.max(raw_slices)) for s in raw_slices])
     return enhanced_slices
 
 
@@ -161,7 +161,7 @@ def apply_mask(raw_slices, mask):
     return np.array(masked_slices)
 
 
-def image_preprocessing(raw_slices, dicom_data, display=False):
+def image_preprocessing(raw_slices, display=False):
     enhanced_slices = contrast_enhancement(raw_slices)
 
     masks = __skull_strip_mcstrip_algorithm(enhanced_slices, display)
