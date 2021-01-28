@@ -135,3 +135,6 @@ dmypy.json
 
 # Dataset folder
 Demo/database*/*
+
+# Sonarqube folder
+Demo/.scannerwork

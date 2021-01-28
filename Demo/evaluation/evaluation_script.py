@@ -6,8 +6,8 @@ import scipy.spatial.distance as distance
 import openpyxl
 import matplotlib.pyplot as plt
 
-import img_processing_functions as img_func
-import utils.img_utils as img_utils
+import Demo.img_processing_functions as img_func
+import Demo.utils.img_utils as img_utils
 
 
 def load_subject_data(folder_path, mask=False, display=False):
@@ -92,14 +92,30 @@ def load_metrics_excel(xlsx_path):
     metrics = []
     for row in range(1, ws.max_row + 1):
         row_vals = []
-        for col in range(1, ws.max_column + 1):
-            row_vals.append(row[col].value)
+        for col in range(2, ws.max_column + 1):
+            row_vals.append(float(ws.cell(row, col).value))
         metrics.append(row_vals)
     return metrics
 
 
 def create_boxplots(xlsx_path):
     metrics = load_metrics_excel(xlsx_path)
+    metrics = np.array(metrics)
+
+    # Create plot
+    fig = plt.figure(figsize=(10, 7))
+    ax = fig.add_subplot(111)
+    bp = ax.boxplot(metrics, patch_artist=True)
+    ax.set_xticklabels(['TP', 'FPR', 'FNR', 'Jaccard'])
+
+    box_color = "#85C1E9"
+    for patch in bp['boxes']:
+        patch.set_facecolor(box_color)
+
+    for median in bp['medians']:
+        median.set(color='red', linewidth=2)
+
+    plt.show()
 
 
 if __name__ == "__main__":
@@ -112,30 +128,29 @@ if __name__ == "__main__":
     # Generate comparation figure with 3 subjects -> boxplot
 
     # READ DATABASE
-    eval_database_path = os.path.join(os.path.dirname(
-        os.path.abspath(__file__)), "database_eval")
-    subject_path_list = [os.path.join(eval_database_path, folder) for folder in os.listdir(
-        eval_database_path) if os.path.isdir(os.path.join(eval_database_path, folder))]
-    subject_path_list.sort()
+    # eval_database_path = os.path.join(os.path.dirname(
+    #     os.path.abspath(__file__)), "database_eval")
+    # subject_path_list = [os.path.join(eval_database_path, folder) for folder in os.listdir(
+    #     eval_database_path) if os.path.isdir(os.path.join(eval_database_path, folder))]
+    # subject_path_list.sort()
 
     xlsx_path = "eval_results.xlsx"
-    metrics = []
-    for subject_path in subject_path_list:
-        subject_id = os.path.basename(subject_path)
-        print(subject_id)
-        # Read brain volume
-        subject_img = load_subject_data(subject_path)
-        # Read brain mask
-        subject_brainmask_ground_truth = load_subject_data(
-            subject_path, mask=True)
-        # Compute brain mask with McStrip algorithm
-        subject_brainmasks_mcstrip,  subject_masked_slices = img_func.image_preprocessing(
-            subject_img)
-        # img_utils.plot_stack(subject_id, subject_masked_slices)
-        metrics.append(calc_metrics(
-            subject_id, subject_brainmasks_mcstrip, subject_brainmask_ground_truth))
+    # metrics = []
+    # for subject_path in subject_path_list:
+    #     subject_id = os.path.basename(subject_path)
+    #     print(subject_id)
+    #     # Read brain volume
+    #     subject_img = load_subject_data(subject_path)
+    #     # Read brain mask
+    #     subject_brainmask_ground_truth = load_subject_data(
+    #         subject_path, mask=True)
+    #     # Compute brain mask with McStrip algorithm
+    #     subject_brainmasks_mcstrip,  subject_masked_slices = img_func.image_preprocessing(
+    #         subject_img)
+    #     # img_utils.plot_stack(subject_id, subject_masked_slices)
+    #     metrics.append(calc_metrics(
+    #         subject_id, subject_brainmasks_mcstrip, subject_brainmask_ground_truth))
 
-    save_metrics_excel(metrics, xlsx_path)
+    # save_metrics_excel(metrics, xlsx_path)
+    # print(metrics)
     create_boxplots(xlsx_path)
-
-    print(metrics)
