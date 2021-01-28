@@ -3,7 +3,8 @@ import time
 import nibabel as nib
 import numpy as np
 import scipy.spatial.distance as distance
-import csv
+import openpyxl
+import matplotlib.pyplot as plt
 
 import img_processing_functions as img_func
 import utils.img_utils as img_utils
@@ -75,14 +76,40 @@ def calc_metrics(subject_id, masks, ground_truth_mask):
     return [subject_id, tpr, fpr, fnr, jaccard]
 
 
+def save_metrics_excel(metrics, xlsx_path):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+
+    for row in metrics:
+        ws.append(row)
+
+    wb.save(xlsx_path)
+
+
+def load_metrics_excel(xlsx_path):
+    wb = openpyxl.load_workbook(xlsx_path)
+    ws = wb.active
+    metrics = []
+    for row in range(1, ws.max_row + 1):
+        row_vals = []
+        for col in range(1, ws.max_column + 1):
+            row_vals.append(row[col].value)
+        metrics.append(row_vals)
+    return metrics
+
+
+def create_boxplots(xlsx_path):
+    metrics = load_metrics_excel(xlsx_path)
+
+
 if __name__ == "__main__":
     # For each subject in eval_database
     #   Load brain volume
     #   Load available mask
     #   Compute mask with implemented mcstrip algorithm
     #   Compute selected metrics and save
-    # Create CSV file with obtained metric values
-    # Generate comparation figure with 3 subjects ??
+    # Create Excel file with obtained metric values
+    # Generate comparation figure with 3 subjects -> boxplot
 
     # READ DATABASE
     eval_database_path = os.path.join(os.path.dirname(
@@ -91,6 +118,7 @@ if __name__ == "__main__":
         eval_database_path) if os.path.isdir(os.path.join(eval_database_path, folder))]
     subject_path_list.sort()
 
+    xlsx_path = "eval_results.xlsx"
     metrics = []
     for subject_path in subject_path_list:
         subject_id = os.path.basename(subject_path)
@@ -107,8 +135,7 @@ if __name__ == "__main__":
         metrics.append(calc_metrics(
             subject_id, subject_brainmasks_mcstrip, subject_brainmask_ground_truth))
 
-    with open("evaluation_results.csv", "w") as csv_file:
-        writer = csv.writer(csv_file)
-        writer.writerows(metrics)
+    save_metrics_excel(metrics, xlsx_path)
+    create_boxplots(xlsx_path)
 
     print(metrics)
