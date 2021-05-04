@@ -10,6 +10,15 @@ def plot_hist(subject, imgs):
     plt.show()
 
 
+def plot_hist_peaks(subject, hist, peaks):
+    plt.plot(hist)
+    plt.xlabel("Voxel values")
+    plt.ylabel("Frequency")
+    plt.title(subject)
+    plt.plot(peaks[0], hist[peaks[0]], 'x')
+    plt.show()
+
+
 def plot_hist_thresholds(img, thresholds):
     # Using the threshold values, we generate the three regions.
     regions = np.digitize(img, bins=thresholds)
@@ -90,6 +99,7 @@ def scale_range(input, min, max):
     input = input / (np.max(input) / (max - min))
     input += min
     return input
+
 
 def display_seg_results(currentSlice, slice_subs, binary_slice, tumor_mask, tumor_mask_final, segmented_tumor):
     _, ax = plt.subplots(nrows=2, ncols=3, figsize=(40))

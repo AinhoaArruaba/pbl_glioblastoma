@@ -1,6 +1,7 @@
 import utils.img_utils as img_utils
 
 import numpy as np
+import os
 from skimage import morphology
 from skimage import measure
 from skimage import filters
@@ -9,11 +10,13 @@ from skimage import exposure
 from medpy.filter import smoothing
 
 from scipy import ndimage
+from scipy.signal import find_peaks
 
 
 def contrast_enhancement(raw_slices):
+    raw_slices = img_utils.scale_range(raw_slices, 0, 1)
     enhanced_slices = np.array(
-        [exposure.equalize_adapthist(s, nbins=np.max(raw_slices)) for s in raw_slices])
+        [exposure.equalize_adapthist(s) for s in raw_slices])
     return enhanced_slices
 
 
@@ -37,7 +40,7 @@ def __get_brain_thresh_mask(raw_slices, coarse_masks):
     lv1_filtered_slices = apply_mask(raw_slices, coarse_masks)
     thresholds = filters.threshold_multiotsu(lv1_filtered_slices, classes=5)
 
-    coarse_masks_eroded = morphology.erosion(coarse_masks, morphology.ball(1))
+    coarse_masks_eroded = morphology.erosion(coarse_masks, morphology.ball(2))
 
     all_labels = measure.label(coarse_masks_eroded)
     regions = measure.regionprops(all_labels)
@@ -48,7 +51,7 @@ def __get_brain_thresh_mask(raw_slices, coarse_masks):
     region_masks = region_masks + \
         np.where(all_labels == regions[0].label, 1, 0)
 
-    region_masks = morphology.dilation(region_masks, morphology.ball(1))
+    # region_masks = morphology.dilation(region_masks, morphology.ball(1))
     lv1_filtered_slices = apply_mask(raw_slices, region_masks)
 
     # Apply threshold to obtain binary slice
@@ -57,7 +60,7 @@ def __get_brain_thresh_mask(raw_slices, coarse_masks):
                                            lv1_filtered_slices[index[0], :, :] < thresholds[3]))
 
     thresh_masks = np.array(thresh_masks)
-    thresh_masks = morphology.erosion(thresh_masks, morphology.ball(2))
+    thresh_masks = morphology.erosion(thresh_masks, morphology.ball(1))
 
     all_labels = measure.label(thresh_masks)
     regions = measure.regionprops(all_labels)
@@ -68,7 +71,7 @@ def __get_brain_thresh_mask(raw_slices, coarse_masks):
     thresh_masks = thresh_masks + \
         np.where(all_labels == regions[0].label, 1, 0)
 
-    thresh_masks = morphology.dilation(thresh_masks, morphology.ball(3))
+    thresh_masks = morphology.dilation(thresh_masks, morphology.ball(1))
     for index in range(thresh_masks.shape[0]):
         thresh_masks[index, :, :] = ndimage.binary_fill_holes(
             thresh_masks[index, :, :])
@@ -175,3 +178,70 @@ def image_preprocessing_brainweb(raw_slices, display=False):
 
     no_skull_slices = apply_mask(raw_slices, masks["consensus"])
     return masks, no_skull_slices
+
+
+def mri_standarization(raw_slices, subjects, display=False):
+    s1 = 0
+    s2 = 4096
+    pc1 = 0
+    pc2 = 99.8
+
+    landmark_file_path = os.path.join('utils', 'landmarks.txt')
+    if not os.path.exists(landmark_file_path):
+        x_array = []
+        # Landmark extraction
+        for s in subjects:
+            m1 = np.min(raw_slices[s])
+            m2 = np.max(raw_slices[s])
+            [hist, edges] = np.histogram(raw_slices[s], bins=m2)
+            p1 = np.percentile(raw_slices[s], pc1)
+            p2 = np.percentile(raw_slices[s], pc2)
+            peaks = find_peaks(hist, prominence=1, width=3,
+                               height=700, distance=3)
+            x = np.max(edges[peaks[0]])
+            x_p = s1 + (((x - p1)/(p2 - p1)) * (s2 - s1))
+            x_array.append(x_p)
+            if display:
+                img_utils.plot_hist_peaks(s, hist, peaks)
+
+        # Store landmarks
+        x_p_mean = np.mean(x_array)
+
+        with open(landmark_file_path, 'w') as landmark_file:
+            landmark_file.write(str(x_p_mean))
+    else:
+        with open(landmark_file_path, 'r') as landmark_file:
+            x_p_mean = float(landmark_file.read())
+
+    # Apply transformations
+    for s in subjects:
+        m1 = np.min(raw_slices[s])
+        m2 = np.max(raw_slices[s])
+        [hist, edges] = np.histogram(raw_slices[s], bins=m2)
+        p1 = np.percentile(raw_slices[s], pc1)
+        p2 = np.percentile(raw_slices[s], pc2)
+        peaks = find_peaks(hist, prominence=1, width=3,
+                           height=700, distance=3)
+        x = np.max(edges[peaks[0]])
+        for index in range(raw_slices[s].shape[0]):
+            for row in range(raw_slices[s].shape[1]):
+                for col in range(raw_slices[s].shape[2]):
+                    voxel_val = raw_slices[s][index, row, col]
+
+                    if voxel_val >= m1 and voxel_val <= x:
+                        new_voxel_val = x_p_mean + \
+                            (voxel_val - x)*((s1 - x_p_mean)/(p1 - x))
+                    else:
+                        new_voxel_val = x_p_mean + \
+                            (voxel_val - x)*((s2 - x_p_mean)/(p2 - x))
+
+                    raw_slices[s][index, row, col] = new_voxel_val
+
+        if display:
+            [hist, edges] = np.histogram(raw_slices[s], bins=m2)
+            peaks = find_peaks(hist, prominence=1, width=3,
+                               height=700, distance=3)
+            img_utils.plot_hist_peaks(s, hist, peaks)
+            img_utils.plot_stack(s, raw_slices[s])
+
+    return raw_slices
