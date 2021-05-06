@@ -11,47 +11,93 @@ import numpy as np
 # Python libraries
 import os
 
+dataset_stand = 'dataset_standarized'
+dataset_no_skull = 'dataset_no_skull'
+img_types = ['t1', 't1c', 't2', 'flair']
 
-# Read database data
-database_path = os.path.join(os.path.dirname(
-    os.path.abspath(__file__)), "database")
-# Obtain subject list
-subjects = dicom_handler.get_subject_list(database_path)
+if not os.path.exists(dataset_stand):
+    # Read database data
+    database_path = os.path.join(os.path.dirname(
+        os.path.abspath(__file__)), "database")
+    # Obtain subject list
+    subjects = dicom_handler.get_subject_list(database_path)
 
-mri_slices_dicom = {}
-mri_slices_stand = {}
-mri_slices_segmented = {}
-raw_slices = {}
-subject_folders = []
+    mri_slices_dicom = {}
+    mri_slices_stand = {}
+    raw_slices = {}
+    subject_folders = {}
 
-for s in subjects:
-    scan_folder = dicom_handler.identify_scan_folder(
-        os.path.join(database_path, s))
+    for s in subjects:
+        scan_folder = dicom_handler.identify_scan_folder(
+            os.path.join(database_path, s))
 
-    for folder in scan_folder[1]:
-        subject_folder = s + '_' + folder
-        mri_slices_dicom[subject_folder] = dicom_handler.load_subject_scan(
-            os.path.join(scan_folder[0], folder))
+        mri_slices_dicom[s] = {}
+        raw_slices[s] = {}
+        subject_folders[s] = {}
+        for folder in scan_folder[1]:
+            if folder in img_types:
+                subject_folder = os.path.join(scan_folder[0], folder)
+                mri_slices_dicom[s][folder] = dicom_handler.load_subject_scan(
+                    os.path.join(scan_folder[0], folder))
 
-        raw_slices[subject_folder] = dicom_handler.extract_raw_img_array(
-            mri_slices_dicom[subject_folder])
-        subject_folders.append(subject_folder)
+                raw_slices[s][folder] = dicom_handler.extract_raw_img_array(
+                    mri_slices_dicom[s][folder])
+                subject_folders[s][folder] = subject_folder
 
-# Apply MRI standarization
-mri_slices_stand = img_func.mri_standarization(
-    raw_slices, subject_folders, True)
+    # Apply MRI standarization
+    mri_slices_stand = img_func.mri_standarization(
+        raw_slices, subjects, False)
 
-# Extract segmentations
-for s in subjects:
-    pass
-    # img_utils.plot_stack(
-    #     s, mri_slices_stand[s][1], rows=6, cols=4, start_with=0)
+    os.mkdir(dataset_stand)
 
-    # mri_slices_segmented[s] = seg.segmentation(
-    #     mri_slices_stand[s], False)
+    for s in subjects:
+        os.mkdir(os.path.join(dataset_stand, s))
+        for mri_type in subject_folders[s]:
+            dicom_handler.save_subject_scan(
+                mri_slices_stand[s][mri_type], s, subject_folders[s][mri_type], mri_type, dataset_stand)
 
-    # img_utils.plot_stack(
-    #     s, np.array(mri_slices_segmented[s]), rows=6, cols=4, start_with=0)
+if not os.path.exists(dataset_no_skull):
+    mri_slices_dicom = {}
+    raw_slices = {}
+    mri_slices_noskull = {}
+    subject_folders = {}
+
+    # Obtain subject list
+    database_path = os.path.join(os.path.dirname(
+        os.path.abspath(__file__)), dataset_stand)
+    subjects = dicom_handler.get_subject_list(database_path)
+
+    # Extract skull
+    for s in subjects:
+        mri_slices_dicom[s] = {}
+        raw_slices[s] = {}
+        subject_folders[s] = {}
+        mri_slices_noskull[s] = {}
+
+        for mri_type in os.listdir(os.path.join(database_path, s)):
+            mri_slices_dicom[s][mri_type] = dicom_handler.load_subject_scan(
+                os.path.join(database_path, s, mri_type))
+            raw_slices[s][mri_type] = dicom_handler.extract_raw_img_array(
+                mri_slices_dicom[s][mri_type])
+            mri_slices_noskull[s][mri_type] = img_func.image_skull_strip(
+                raw_slices[s][mri_type], False)
+            subject_folders[s][mri_type] = os.path.join(
+                database_path, s, mri_type)
+
+    os.mkdir(dataset_no_skull)
+    database_path = os.path.join(os.path.dirname(
+        os.path.abspath(__file__)), dataset_no_skull)
+
+    for s in subjects:
+        os.mkdir(os.path.join(dataset_no_skull, s))
+        for mri_type in subject_folders[s]:
+            dicom_handler.save_subject_scan(
+                mri_slices_noskull[s][mri_type], s, subject_folders[s][mri_type], mri_type, dataset_no_skull)
+
+# mri_slices_segmented[s] = seg.segmentation(
+#     mri_slices_stand[s], False)
+# img_utils.plot_stack(
+#     s, np.array(mri_slices_segmented[s]), rows=6, cols=4, start_with=0)
 
 
 print('Done')

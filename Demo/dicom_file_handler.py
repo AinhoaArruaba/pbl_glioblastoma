@@ -22,6 +22,27 @@ def load_subject_scan(scan_path):
     return slices
 
 
+def save_subject_scan(raw_slices, subject, scan_path, scan_type, new_folder):
+    slices = [dicom.read_file(scan_path + '/' + s)
+              for s in os.listdir(scan_path)]
+    slices.sort(key=lambda x: int(x.InstanceNumber))
+    try:
+        slice_thickness = np.abs(
+            slices[0].ImagePositionPatient[2] - slices[1].ImagePositionPatient[2])
+    except:
+        slice_thickness = np.abs(
+            slices[0].SliceLocation - slices[1].SliceLocation)
+
+    os.mkdir(os.path.join(new_folder, subject, scan_type))
+
+    for index in enumerate(slices):
+        slices[index[0]].SliceThickness = slice_thickness
+        slices[index[0]].PixelData = raw_slices[index[0], :, :].tobytes()
+
+        slices[index[0]].save_as(os.path.join(
+            new_folder, subject, scan_type, 'slice_' + str(index[0]) + '.dcm'))
+
+
 def extract_raw_img_array(slices):
     ref_slice = slices[0]
     pixel_dims = (len(slices), int(ref_slice.Rows), int(ref_slice.Columns))
@@ -44,7 +65,6 @@ def identify_scan_folder(path):
     study_folder = None
 
     if subject_studies:
-        study_folder = os.path.join(path, subject_studies[0])
         if len(subject_studies) > 1:
             dates = []
             for index, study in enumerate(subject_studies):
@@ -57,7 +77,7 @@ def identify_scan_folder(path):
 
         study_scans = os.listdir(study_folder)
         for index, scan in enumerate(study_scans):
-            if 'ax' in scan.lower():
+            if not '.ds_store' in scan.lower():
                 scans.append(scan)
     return study_folder, scans
 

@@ -40,7 +40,7 @@ def plot_hist_thresholds(img, thresholds):
 
 
 def plot_stack(subject, img, rows=6, cols=4, start_with=0):
-    show_every = int(img.shape[0]/(rows*cols))
+    show_every = round(img.shape[0]/(rows*cols))
     fig, ax = plt.subplots(rows, cols, figsize=[12, 12])
     for i in range(rows*cols):
         ind = start_with + i*show_every
