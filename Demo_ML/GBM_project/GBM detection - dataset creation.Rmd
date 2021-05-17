@@ -1,0 +1,294 @@
+---
+title: "Detección GBM - creación de BD"
+output: html_notebook
+---
+
+
+```{r library load}
+library(jsonlite)
+library(mlbench)
+library(corrplot)
+library(Amelia)
+```
+
+
+
+
+```{r}
+dataset <- fromJSON(txt = "GBM.json")
+dataset <- dataset[, -which(names(dataset) == 'specimens', arr.ind = TRUE)]
+dataset <- dataset[, -which(names(dataset) == 'updated', arr.ind = TRUE)]
+dataset <- dataset[, -which(names(dataset) == 'inserted', arr.ind = TRUE)]
+
+dataset <- dataset[,order(colnames(dataset))]
+
+case_id_with_images <- c("C3L-00016", "C3L-00019", "C3L-00265", "C3L-00278", "C3L-00349", "C3L-00424", "C3L-00506",
+                         "C3L-00528", "C3L-00591", "C3L-00631", "C3L-00671", "C3L-00677", "C3L-01040", "C3L-01043",
+                         "C3L-01045", "C3L-01046", "C3L-01049", "C3L-01142", "C3L-01146", "C3L-01155", "C3L-01156",
+                         "C3L-01327", "C3L-02041", "C3L-02465", "C3L-02504", "C3L-02704", "C3L-02705", "C3L-02706",
+                         "C3L-02708", "C3L-03260", "C3L-03266", "C3L-03727", "C3L-03744", "C3L-03747", "C3L-03748",
+                         "C3L-04084", "C3N-00661", "C3N-00662", "C3N-00663", "C3N-00665", "C3N-01192", "C3N-01196",
+                         "C3N-01505", "C3N-01849", "C3N-01851", "C3N-01852", "C3N-02255", "C3N-02256", "C3N-02286",
+                         "C3N-03001", "C3N-03003", "C3N-03755", "C3N-03756", "C3N-04686")
+```
+
+
+## EDA
+
+```{r EDA var type}
+print("Dataset size")
+dim(dataset)
+print("Dataset variable names")
+names(dataset)
+
+print("Variable classes")
+sapply(dataset, class)
+dataset$case_id <- as.factor(dataset$case_id)
+dataset$gender <- as.factor(dataset$gender)
+dataset$ethnicity <- as.factor(dataset$ethnicity)
+dataset$race <- as.factor(dataset$race)
+dataset$alcohol_consumption <- as.factor(dataset$alcohol_consumption)
+dataset$vital_status_at_12months_follow_up <- as.factor(dataset$vital_status_at_12months_follow_up)
+dataset$vital_status_at_24months_follow_up <- as.factor(dataset$vital_status_at_24months_follow_up)
+dataset$vital_status_at_36months_follow_up <- as.factor(dataset$vital_status_at_36months_follow_up)
+dataset$vital_status_at_48months_follow_up <- as.factor(dataset$vital_status_at_48months_follow_up)
+dataset$tumor_status_at_12months_follow_up <- as.factor(dataset$tumor_status_at_12months_follow_up)
+dataset$tumor_status_at_24months_follow_up <- as.factor(dataset$tumor_status_at_24months_follow_up)
+dataset$tumor_status_at_36months_follow_up <- as.factor(dataset$tumor_status_at_36months_follow_up)
+dataset$tumor_status_at_48months_follow_up <- as.factor(dataset$tumor_status_at_48months_follow_up)
+dataset$tobacco_smoking_history <- as.factor(dataset$tobacco_smoking_history)
+dataset$tumor_code <- as.factor(dataset$tumor_code)
+dataset$tumor_site <- as.factor(dataset$tumor_site)
+dataset$tumor_site_other <- as.factor(dataset$tumor_site_other)
+dataset$cause_of_death_at_12months_follow_up <- as.factor(dataset$cause_of_death_at_12months_follow_up)
+dataset$cause_of_death_at_24months_follow_up <- as.factor(dataset$cause_of_death_at_24months_follow_up)
+dataset$cause_of_death_at_36months_follow_up <- as.factor(dataset$cause_of_death_at_36months_follow_up)
+dataset$cause_of_death_at_48months_follow_up <- as.factor(dataset$cause_of_death_at_48months_follow_up)
+
+dataset$days_from_initial_diagnosis_to_last_contact_at_12months_follow_up <- as.integer(dataset$days_from_initial_diagnosis_to_last_contact_at_12months_follow_up)
+dataset$days_from_initial_pathologic_diagnosis_to_death_at_12months_follow_up <- as.integer(dataset$days_from_initial_pathologic_diagnosis_to_death_at_12months_follow_up)
+
+dataset$years_high_alcohol_quantity_consumed <- as.integer(dataset$number_of_years_consumed_more_than_2_drinks_per_day_for_men_or_more_than_1_for_women)
+dataset <- dataset[, -which(names(dataset) == 'number_of_years_consumed_more_than_2_drinks_per_day_for_men_or_more_than_1_for_women', arr.ind = TRUE)]
+
+dataset <- dataset[, -which(names(dataset) == 'histologic_type', arr.ind = TRUE)]
+dataset <- dataset[, -which(names(dataset) == 'histologic_type_other', arr.ind = TRUE)]
+dataset <- dataset[, -which(names(dataset) == 'discovery_study', arr.ind = TRUE)]
+dataset <- dataset[, -which(names(dataset) == 'discovery_study/analyzed_samples', arr.ind = TRUE)]
+dataset <- dataset[, -which(names(dataset) == 'tumor_code', arr.ind = TRUE)]
+print("Summary del dataset despues de los cambios")
+summary(dataset)
+
+print("Tamaño del dataset")
+dim(dataset)
+```
+
+
+```{r EDA NA}
+# Missmap antes de añadir los nuevos valores
+missmap(dataset, col=c("black", "grey"), legend=FALSE)
+levels(dataset$cause_of_death_at_12months_follow_up) <- c(levels(dataset$cause_of_death_at_12months_follow_up), "None")
+levels(dataset$cause_of_death_at_24months_follow_up) <- c(levels(dataset$cause_of_death_at_24months_follow_up), "None")
+levels(dataset$cause_of_death_at_36months_follow_up) <- c(levels(dataset$cause_of_death_at_36months_follow_up), "None")
+levels(dataset$cause_of_death_at_48months_follow_up) <- c(levels(dataset$cause_of_death_at_36months_follow_up), "None")
+
+
+# Llenar algunos valores NA
+for(row in 1:dim(dataset)[1]){
+  if(!is.na(dataset[row,]$race) && dataset[row,]$race == 'Not Reported'){
+    dataset[row,]$race <- NA
+  }
+  if(!is.na(dataset[row,]$ethnicity) && dataset[row,]$ethnicity == 'Not Reported'){
+    dataset[row,]$ethnicity <- NA
+  }
+  if(!is.na(dataset[row,]$alcohol_consumption) && (dataset[row,]$alcohol_consumption == 'Lifelong non-drinker' || dataset[row,]$alcohol_consumption == 'Alcohol consumption equal to or less than 2 drinks per day for men and 1 drink or less per day for women') && is.na(dataset[row,]$years_high_alcohol_quantity_consumed)){
+    dataset[row,]$years_high_alcohol_quantity_consumed <- 0
+  }
+  if(!is.na(dataset[row,]$alcohol_consumption) && dataset[row,]$alcohol_consumption == "Alcohol consumption history not available"){
+    dataset[row,]$alcohol_consumption <- NA
+  }
+  if(!is.na(dataset[row,]$tobacco_smoking_history) && dataset[row,]$tobacco_smoking_history == "Smoking history not available"){
+    dataset[row,]$tobacco_smoking_history <- NA
+  }
+  if(!is.na(dataset[row,]$tobacco_smoking_history) && dataset[row,]$tobacco_smoking_history == 'Lifelong non-smoker: Less than 100 cigarettes smoked in lifetime' && is.na(dataset[row,]$number_of_pack_years_smoked)){
+    dataset[row,]$number_of_pack_years_smoked <- 0
+  }
+  if(!is.na(dataset[row,]$vital_status_at_12months_follow_up) && dataset[row,]$vital_status_at_12months_follow_up == 'Living' && is.na(dataset[row,]$cause_of_death_at_12months_follow_up)){
+    dataset[row,]$cause_of_death_at_12months_follow_up <- 'None'
+  }
+  if(!is.na(dataset[row,]$vital_status_at_24months_follow_up) && dataset[row,]$vital_status_at_24months_follow_up == 'Living' && is.na(dataset[row,]$cause_of_death_at_24months_follow_up)){
+    dataset[row,]$cause_of_death_at_24months_follow_up <- 'None'
+  }
+  if(!is.na(dataset[row,]$vital_status_at_36months_follow_up) && dataset[row,]$vital_status_at_36months_follow_up == 'Living' && is.na(dataset[row,]$cause_of_death_at_36months_follow_up)){
+    dataset[row,]$cause_of_death_at_36months_follow_up <- 'None'
+  }
+  if(!is.na(dataset[row,]$vital_status_at_48months_follow_up) && dataset[row,]$vital_status_at_48months_follow_up == 'Living' && is.na(dataset[row,]$cause_of_death_at_48months_follow_up)){
+    dataset[row,]$cause_of_death_at_48months_follow_up <- 'None'
+  }
+  if(!is.na(dataset[row,]$cause_of_death_at_12months_follow_up) && dataset[row,]$cause_of_death_at_12months_follow_up != 'None' && is.na(dataset[row,]$vital_status_at_12months_follow_up)){
+    dataset[row,]$vital_status_at_12months_follow_up <- 'Deceased'
+  }
+  if(!is.na(dataset[row,]$cause_of_death_at_24months_follow_up) && dataset[row,]$cause_of_death_at_24months_follow_up != 'None' && is.na(dataset[row,]$vital_status_at_24months_follow_up)){
+    dataset[row,]$vital_status_at_24months_follow_up <- 'Deceased'
+  }
+  if(!is.na(dataset[row,]$cause_of_death_at_36months_follow_up) && dataset[row,]$cause_of_death_at_36months_follow_up != 'None' && is.na(dataset[row,]$vital_status_at_36months_follow_up)){
+    dataset[row,]$vital_status_at_36months_follow_up <- 'Deceased'
+  }
+  if(!is.na(dataset[row,]$cause_of_death_at_48months_follow_up) && dataset[row,]$cause_of_death_at_48months_follow_up != 'None' && is.na(dataset[row,]$vital_status_at_48months_follow_up)){
+    dataset[row,]$vital_status_at_48months_follow_up <- 'Deceased'
+  }
+  if(!is.na(dataset[row,]$vital_status_at_12months_follow_up) && dataset[row,]$vital_status_at_12months_follow_up == 'Deceased' && is.na(dataset[row,]$vital_status_at_24months_follow_up)){
+    dataset[row,]$vital_status_at_24months_follow_up <- 'Deceased'
+  }
+  if(!is.na(dataset[row,]$vital_status_at_24months_follow_up) && dataset[row,]$vital_status_at_24months_follow_up == 'Deceased' && is.na(dataset[row,]$vital_status_at_36months_follow_up)){
+    dataset[row,]$vital_status_at_36months_follow_up <- 'Deceased'
+  }
+  if(!is.na(dataset[row,]$vital_status_at_36months_follow_up) && dataset[row,]$vital_status_at_36months_follow_up == 'Deceased' && is.na(dataset[row,]$vital_status_at_48months_follow_up)){
+    dataset[row,]$vital_status_at_48months_follow_up <- 'Deceased'
+  }
+}
+
+dataset$tumor_site <- as.character(dataset$tumor_site)
+for(row in 1:dim(dataset)[1]){
+  if(!is.na(dataset[row, ]$tumor_site) && !is.na(dataset[row, ]$tumor_site_other) && dataset[row, ]$tumor_site == 'Other'){
+    dataset[row, ]$tumor_site <- levels(dataset$tumor_site_other)[dataset[row, ]$tumor_site_other]
+  }
+}
+
+dataset[,"time_monitored"] <- NA
+for(row in 1:dim(dataset)[1]){
+  if(!is.na(dataset[row, ]$days_from_initial_diagnosis_to_last_contact_at_48months_follow_up)){
+    dataset[row, ]$time_monitored <- dataset[row, ]$days_from_initial_diagnosis_to_last_contact_at_48months_follow_up
+  } else if(!is.na(dataset[row, ]$days_from_initial_diagnosis_to_last_contact_at_36months_follow_up)){
+    dataset[row, ]$time_monitored <- dataset[row, ]$days_from_initial_diagnosis_to_last_contact_at_36months_follow_up
+  } else if(!is.na(dataset[row, ]$days_from_initial_diagnosis_to_last_contact_at_24months_follow_up)){
+    dataset[row, ]$time_monitored <- dataset[row, ]$days_from_initial_diagnosis_to_last_contact_at_24months_follow_up
+  } else if(!is.na(dataset[row, ]$days_from_initial_diagnosis_to_last_contact_at_12months_follow_up)){
+    dataset[row, ]$time_monitored <- dataset[row, ]$days_from_initial_diagnosis_to_last_contact_at_12months_follow_up
+  }
+}
+
+
+dataset <- dataset[, -which(names(dataset) == 'days_from_initial_diagnosis_to_last_contact_at_24months_follow_up', arr.ind = TRUE)]
+dataset <- dataset[, -which(names(dataset) == 'days_from_initial_diagnosis_to_last_contact_at_36months_follow_up', arr.ind = TRUE)]
+dataset <- dataset[, -which(names(dataset) == 'days_from_initial_diagnosis_to_last_contact_at_48months_follow_up', arr.ind = TRUE)]
+
+dataset$tumor_site <- as.factor(dataset$tumor_site)
+dataset <- dataset[, -which(names(dataset) == 'tumor_site_other', arr.ind = TRUE)]
+
+# Missmap after adding new values
+missmap(dataset, col=c("black", "grey"), legend=FALSE)
+summary(dataset)
+```
+
+Creación del dataset para el análisis de factores de riesgo
+```{r}
+dataset_risk <- dataset
+dataset_risk[,"vital_status"] <- NA
+for(row in 1:dim(dataset_risk)[1]){
+  if(!is.na(dataset_risk[row, ]$vital_status_at_12months_follow_up) && !is.na(dataset_risk[row, ]$vital_status_at_24months_follow_up)  && !is.na(dataset_risk[row, ]$vital_status_at_36months_follow_up) && !is.na(dataset_risk[row, ]$vital_status_at_48months_follow_up) && (dataset_risk[row, ]$vital_status_at_12months_follow_up == 'Deceased' || dataset_risk[row, ]$vital_status_at_24months_follow_up == 'Deceased' || dataset_risk[row, ]$vital_status_at_36months_follow_up == 'Deceased' || dataset_risk[row, ]$vital_status_at_48months_follow_up == 'Deceased')){
+    dataset_risk[row, ]$vital_status <- 'Deceased'
+  }else {
+    dataset_risk[row, ]$vital_status <- 'Living'
+  }
+}
+
+dataset_risk <- dataset_risk[, -which(names(dataset_risk) == 'vital_status_at_12months_follow_up', arr.ind = TRUE)]
+dataset_risk <- dataset_risk[, -which(names(dataset_risk) == 'vital_status_at_24months_follow_up', arr.ind = TRUE)]
+dataset_risk <- dataset_risk[, -which(names(dataset_risk) == 'vital_status_at_36months_follow_up', arr.ind = TRUE)]
+dataset_risk <- dataset_risk[, -which(names(dataset_risk) == 'vital_status_at_48months_follow_up', arr.ind = TRUE)]
+
+dataset_risk[,"cause_of_death"] <- NA
+for(row in 1:dim(dataset_risk)[1]){
+  if(!is.na(dataset_risk[row, ]$cause_of_death_at_12months_follow_up) && dataset_risk[row, ]$cause_of_death_at_12months_follow_up != 'None'){
+    dataset_risk[row, ]$cause_of_death <- levels(dataset_risk$cause_of_death_at_12months_follow_up)[dataset_risk[row, ]$cause_of_death_at_12months_follow_up]
+  }else if(!is.na(dataset_risk[row, ]$cause_of_death_at_24months_follow_up) && dataset_risk[row, ]$cause_of_death_at_24months_follow_up != 'None'){
+    dataset_risk[row, ]$cause_of_death <- levels(dataset_risk$cause_of_death_at_24months_follow_up)[dataset_risk[row, ]$cause_of_death_at_24months_follow_up]
+  }else if(!is.na(dataset_risk[row, ]$cause_of_death_at_36months_follow_up) && dataset_risk[row, ]$cause_of_death_at_36months_follow_up != 'None'){
+    dataset_risk[row, ]$cause_of_death <- levels(dataset_risk$cause_of_death_at_36months_follow_up)[dataset_risk[row, ]$cause_of_death_at_36months_follow_up]
+  }else if(!is.na(dataset_risk[row, ]$cause_of_death_at_48months_follow_up) && dataset_risk[row, ]$cause_of_death_at_48months_follow_up != 'None'){
+    dataset_risk[row, ]$cause_of_death <- levels(dataset_risk$cause_of_death_at_48months_follow_up)[dataset_risk[row, ]$cause_of_death_at_48months_follow_up]
+  }else if(dataset_risk[row, ]$vital_status == 'Living') {
+    dataset_risk[row, ]$cause_of_death <- 'None'
+  }
+}
+
+dataset_risk$cause_of_death <- as.factor(dataset_risk$cause_of_death)
+dataset_risk <- dataset_risk[, -which(names(dataset_risk) == 'cause_of_death_at_12months_follow_up', arr.ind = TRUE)]
+dataset_risk <- dataset_risk[, -which(names(dataset_risk) == 'cause_of_death_at_24months_follow_up', arr.ind = TRUE)]
+dataset_risk <- dataset_risk[, -which(names(dataset_risk) == 'cause_of_death_at_36months_follow_up', arr.ind = TRUE)]
+dataset_risk <- dataset_risk[, -which(names(dataset_risk) == 'cause_of_death_at_48months_follow_up', arr.ind = TRUE)]
+
+dataset_risk <- dataset_risk[, -which(names(dataset_risk) == 'tumor_status_at_12months_follow_up', arr.ind = TRUE)]
+dataset_risk <- dataset_risk[, -which(names(dataset_risk) == 'tumor_status_at_24months_follow_up', arr.ind = TRUE)]
+dataset_risk <- dataset_risk[, -which(names(dataset_risk) == 'tumor_status_at_36months_follow_up', arr.ind = TRUE)]
+dataset_risk <- dataset_risk[, -which(names(dataset_risk) == 'tumor_status_at_48months_follow_up', arr.ind = TRUE)]
+
+dataset_risk <- dataset_risk[-which(dataset_risk$cause_of_death == 'Unknown', arr.ind = TRUE),]
+dataset_risk <- dataset_risk[-which(dataset_risk$cause_of_death == 'Other', arr.ind = TRUE),]
+dataset_risk <- dataset_risk[-which(dataset_risk$cause_of_death == 'Pneumonia', arr.ind = TRUE),]
+
+dataset_risk$cause_of_death <- as.factor(dataset_risk$cause_of_death)
+dataset_risk[,"life_expectancy"] <- NA
+for(row in 1:dim(dataset_risk)[1]){
+  if(!is.na(dataset_risk[row, ]$days_from_initial_pathologic_diagnosis_to_death_at_12months_follow_up)){
+    dataset_risk[row, ]$life_expectancy <- dataset_risk[row, ]$days_from_initial_pathologic_diagnosis_to_death_at_12months_follow_up
+  } else if(!is.na(dataset_risk[row, ]$days_from_initial_pathologic_diagnosis_to_death_at_24months_follow_up)){
+    dataset_risk[row, ]$life_expectancy <- dataset_risk[row, ]$days_from_initial_pathologic_diagnosis_to_death_at_24months_follow_up
+  } else if(!is.na(dataset_risk[row, ]$days_from_initial_pathologic_diagnosis_to_death_at_36months_follow_up)){
+    dataset_risk[row, ]$life_expectancy <- dataset_risk[row, ]$days_from_initial_pathologic_diagnosis_to_death_at_36months_follow_up
+  }else if(!is.na(dataset_risk[row, ]$days_from_initial_pathologic_diagnosis_to_death_at_48months_follow_up)){
+    dataset_risk[row, ]$life_expectancy <- dataset_risk[row, ]$days_from_initial_pathologic_diagnosis_to_death_at_48months_follow_up
+  }
+}
+
+dataset_risk <- dataset_risk[, -which(names(dataset_risk) == 'days_from_initial_diagnosis_to_last_contact_at_12months_follow_up', arr.ind = TRUE)]
+dataset_risk <- dataset_risk[, -which(names(dataset_risk) == 'days_from_initial_pathologic_diagnosis_to_death_at_12months_follow_up', arr.ind = TRUE)]
+dataset_risk <- dataset_risk[, -which(names(dataset_risk) == 'days_from_initial_pathologic_diagnosis_to_death_at_24months_follow_up', arr.ind = TRUE)]
+dataset_risk <- dataset_risk[, -which(names(dataset_risk) == 'days_from_initial_pathologic_diagnosis_to_death_at_36months_follow_up', arr.ind = TRUE)]
+dataset_risk <- dataset_risk[, -which(names(dataset_risk) == 'days_from_initial_pathologic_diagnosis_to_death_at_48months_follow_up', arr.ind = TRUE)]
+```
+
+
+Guardar solo los pacientes para los que se han obtenido las imágenes en una base de datos separada.
+```{r}
+case_id_with_images_index <- c()
+for(i in 1:length(case_id_with_images)){
+  case_id_with_images_index[i] <-  which(dataset$case_id == case_id_with_images[i], arr.ind = TRUE)
+}
+
+dataset_images <- dataset[case_id_with_images_index,1:dim(dataset)[2]]
+
+dataset_images_12month <- dataset_images
+dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'days_from_initial_pathologic_diagnosis_to_death_at_24months_follow_up', arr.ind = TRUE)]
+dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'days_from_initial_pathologic_diagnosis_to_death_at_36months_follow_up', arr.ind = TRUE)]
+dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'days_from_initial_pathologic_diagnosis_to_death_at_48months_follow_up', arr.ind = TRUE)]
+dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'cause_of_death_at_24months_follow_up', arr.ind = TRUE)]
+dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'cause_of_death_at_36months_follow_up', arr.ind = TRUE)]
+dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'cause_of_death_at_48months_follow_up', arr.ind = TRUE)]
+dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'vital_status_at_24months_follow_up', arr.ind = TRUE)]
+dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'vital_status_at_36months_follow_up', arr.ind = TRUE)]
+dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'vital_status_at_48months_follow_up', arr.ind = TRUE)]
+dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'tumor_status_at_24months_follow_up', arr.ind = TRUE)]
+dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'tumor_status_at_36months_follow_up', arr.ind = TRUE)]
+dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'tumor_status_at_48months_follow_up', arr.ind = TRUE)]
+
+
+dataset_images_12month <- dataset_images_12month[-which(dataset_images_12month$cause_of_death_at_12months_follow_up == 'Other', arr.ind = TRUE),]
+dataset_images_12month <- dataset_images_12month[-which(dataset_images_12month$cause_of_death_at_12months_follow_up == 'Pneumonia', arr.ind = TRUE),]
+
+missmap(dataset_images_12month, col=c("black", "grey"), legend=FALSE)
+summary(dataset_images_12month)
+```
+
+
+```{r store datasets}
+dataset_risk <- droplevels(dataset_risk)
+dataset_images_12month <- droplevels(dataset_images_12month)
+
+save(dataset_risk, file = 'dataset_risk.Rda')
+save(dataset_images_12month, file = 'dataset_images_12month.Rda')
+
+```
+
+
