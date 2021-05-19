@@ -316,8 +316,9 @@ def apply_mask(raw_slices, mask):
 
 def image_skull_strip(raw_slices, display=False):
     masks = __skull_strip_mcstrip_algorithm(raw_slices, display)
-
+    masks["consensus"] = masks["consensus"].astype(np.int16)
     no_skull_slices = apply_mask(raw_slices, masks["consensus"])
+    no_skull_slices = no_skull_slices.astype(np.int16)
 
     return masks, no_skull_slices
 

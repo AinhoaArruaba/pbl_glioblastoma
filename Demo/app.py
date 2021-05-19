@@ -66,29 +66,30 @@ if not os.path.exists(dataset_stand):
             dicom_handler.save_subject_scan(
                 mri_slices_stand[s][mri_type], s, subject_folders[s][mri_type], mri_type, dataset_stand)
 
-if not os.path.exists(dataset_no_skull):
-    print("MRI skull-stripping started")
-    mri_slices_dicom = {}
-    raw_slices = {}
-    mri_slices_noskull = {}
-    subject_folders = {}
 
-    # Obtain subject list
-    database_path = os.path.join(os.path.dirname(
-        os.path.abspath(__file__)), dataset_stand)
-    subjects = dicom_handler.get_subject_list(database_path)
+print("MRI skull-stripping started")
+mri_slices_dicom = {}
+raw_slices = {}
+mri_slices_noskull = {}
+subject_folders = {}
 
-    # Extract skull
-    for s in subjects:
-        print("Reading subject " + s)
-        if not '.ds_store' in s.lower():
-            mri_slices_dicom[s] = {}
-            raw_slices[s] = {}
-            subject_folders[s] = {}
-            mri_slices_noskull[s] = {}
+# Obtain subject list
+database_path = os.path.join(os.path.dirname(
+    os.path.abspath(__file__)), dataset_stand)
+subjects = dicom_handler.get_subject_list(database_path)
 
-            for mri_type in os.listdir(os.path.join(database_path, s)):
-                if mri_type in img_types:
+# Extract skull
+for s in subjects:
+    print("Reading subject " + s)
+    if not s.lower() == '.ds_store':
+        mri_slices_dicom[s] = {}
+        raw_slices[s] = {}
+        subject_folders[s] = {}
+        mri_slices_noskull[s] = {}
+
+        for mri_type in os.listdir(os.path.join(database_path, s)):
+            if mri_type in img_types:
+                if not os.path.exists(os.path.join(dataset_no_skull, s, mri_type)):
                     print("Skull-stripping for MRI type " + mri_type.upper())
                     mri_slices_dicom[s][mri_type] = dicom_handler.load_subject_scan(
                         os.path.join(database_path, s, mri_type))
@@ -101,16 +102,18 @@ if not os.path.exists(dataset_no_skull):
                     subject_folders[s][mri_type] = os.path.join(
                         database_path, s, mri_type)
 
+if not os.path.exists(dataset_no_skull):
     os.mkdir(dataset_no_skull)
-    database_path = os.path.join(os.path.dirname(
-        os.path.abspath(__file__)), dataset_no_skull)
+database_path = os.path.join(os.path.dirname(
+    os.path.abspath(__file__)), dataset_no_skull)
 
-    print("Saving skull-stripped MRI images")
-    for s in subjects:
+print("Saving skull-stripped MRI images")
+for s in subjects:
+    if not os.path.exists(os.path.join(dataset_no_skull, s)):
         os.mkdir(os.path.join(dataset_no_skull, s))
-        for mri_type in subject_folders[s]:
-            dicom_handler.save_subject_scan(
-                mri_slices_noskull[s][mri_type][1], s, subject_folders[s][mri_type], mri_type, dataset_no_skull)
+    for mri_type in subject_folders[s]:
+        dicom_handler.save_subject_scan(
+            mri_slices_noskull[s][mri_type][1], s, subject_folders[s][mri_type], mri_type, dataset_no_skull)
 
 # mri_slices_segmented[s] = seg.segmentation(
 #     mri_slices_stand[s], False)

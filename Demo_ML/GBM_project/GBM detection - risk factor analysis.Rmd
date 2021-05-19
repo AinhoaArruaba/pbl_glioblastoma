@@ -1,5 +1,5 @@
 ---
-title: "Detección GBM - análisis de los factores de riesgo"
+title: "Detección GBM - analisis de los factores de riesgo"
 output: html_notebook
 ---
 
@@ -10,6 +10,9 @@ library(corrplot)
 library(Amelia)
 library(caret)
 library(e1071)
+library(survival)
+library(ranger)
+library(mice)
 ```
 
 Este script muestra los pasos seguidos para el análisis de los factores de riesgo que pueden llevar al desarrollo de un glioblastoma multiforme (GBM) y no sobrevivir.
@@ -38,8 +41,8 @@ cause_of_death_index <- which(names(dataset_risk) == 'cause_of_death', arr.ind =
 vital_status_index <- which(names(dataset_risk) == 'vital_status', arr.ind = TRUE)
 life_expectancy_index <- which(names(dataset_risk) == 'life_expectancy', arr.ind = TRUE)
 
-# Elminar las entradas con más del 60% de las variables con NA
-print("Tamaño del dataset antes de eliminar entradas")
+# Elminar las entradas con más del 70% de las variables con NA
+# Tamaño del dataset antes de eliminar entradas
 dim(dataset_risk)
 dataset_risk <- dataset_risk[which(rowMeans(!is.na(dataset_risk)) > 0.7), ]
 # Eliminar variables con más del 30% de los valores con NA
@@ -56,10 +59,9 @@ non_numeric_var_indexes <- which(sapply(dataset_risk, class) == 'factor', arr.in
 non_numeric_var_indexes <- non_numeric_var_indexes[-which(non_numeric_var_indexes ==  cause_of_death_index, arr.ind = TRUE)]
 non_numeric_var_indexes <- non_numeric_var_indexes[-which(non_numeric_var_indexes ==  vital_status_index, arr.ind = TRUE)]
 
-print("Tamaño del dataset tras eliminar entradas")
+# Tamaño del dataset tras eliminar entradas
 dim(dataset_risk)
 missmap(dataset_risk, col=c("black", "grey"), legend=FALSE)
-
 # Histogramas de las variables numéricas
 par(mfrow=c(1, 4))
 for(i in 1:length(numeric_var_indexes)) {
@@ -70,13 +72,11 @@ par(mfrow=c(1, 3))
 for(i in 1:length(non_numeric_var_indexes)) {
     barplot(table(dataset_risk[,non_numeric_var_indexes[i]]), main=names(dataset_risk)[non_numeric_var_indexes[i]], las=2)
 }
-
 # Correlación de las variables numéricas
 par(mfrow=c(1, 1))
 correlation_numeric_vars <- cor(dataset_risk[, c(numeric_var_indexes, life_expectancy_index)], use = "complete.obs")
 corrplot(correlation_numeric_vars, method="circle")
-
-print("Valores del skewness")
+# Valores del skewness
 for(i in 1:length(numeric_var_indexes)){
   print(names(dataset_risk)[numeric_var_indexes[i]])
   print(skewness(dataset_risk[, numeric_var_indexes[i]], na.rm = TRUE))
@@ -89,7 +89,7 @@ De los datos extraidos en este punto se han realizado las siguientes observacion
 
 * La variable life_expectancy también contiene muchos valores NA pero no preocupan por el momento, ya que estos valores se corresponden a pacientes que siguen vivos. En la variable tumor_size hay un único valor NA que tendrá que ser imputado.
 
-* Además, las entradas que no llegan al 60% de variables definidas se han eliminado del dataset, eliminando un total de 9 entradas.
+* Además, las entradas que no llegan al 60% de variables definidas se han eliminado del dataset, eliminando un total de 12 entradas.
 
 * Se ha identificado un valor imposible en la variable height, que se corresponde a una altura de 394 cm. Este valor se asigna como un valor NA y se imputará en el paso de preprocesado. Los histogramas se muestran otra vez sin este valor.
 
@@ -185,10 +185,11 @@ barplot(table(dataset_vital_status[, c(non_numeric_var_indexes_vital[5], class_v
 # Class imbalance
 cbind(Label_freq=table(dataset_vital_status$vital_status), Label_percent=prop.table(table(dataset_vital_status$vital_status))*100)
 ```
+Con los datos obtenidos se concluyen los siguientes puntos.
 
-Por un lado, se observa que el dataset está más o menos balanceado (40.5% de pacientes vivos y 59.5% muertos).
+* Se observa que el dataset está más o menos balanceado (40.5% de pacientes vivos y 59.5% muertos).
 
-Por otro lado, analizando los boxplots y los barplots creados, no se puede determinan una separación clara entre las distintas variables de clase. La realidad es que hay ciertas tendencias, por ejemplo, parece que la mayoría de los que han muerto tenian un tamaño de tumor algo más alto como mediana, o que hay más supervivientes en edades menos avanzadas, pero no se observa que ninguna variable sea determinante para predicción de el estado del paciente.
+* Analizando los boxplots y los barplots creados, no se puede determinan una separación clara entre las distintas variables de clase. La realidad es que hay ciertas tendencias, por ejemplo, parece que la mayoría de los que han muerto tenian un tamaño de tumor algo más alto como mediana, o que hay más supervivientes en edades menos avanzadas, pero no se observa que ninguna variable sea determinante para predicción de el estado del paciente.
 
 # Análisis de la causa de muerte
 
@@ -262,9 +263,11 @@ barplot(table(dataset_cause[, c(non_numeric_var_indexes_cause[5], class_val_inde
 cbind(Label_freq=table(dataset_cause$cause_of_death), Label_percent=prop.table(table(dataset_cause$cause_of_death))*100)
 
 ```
-Por un lado, se observa que el dataset está no está balanceado (46.8% de pacientes muertos a causa de GBM, 39.36% por Malingnant Brain Neoplasm, 8.52% por Malingnant Nervous System Neoplasm, 3.19% por Brain Edema y 2.13% por Postoperative Edema).
+Con los datos obtenidos se concluyen los siguientes puntos.
 
-Por otro lado, en cuanto a los boxplots y barplots empleados, no se observa una clara diferencua entre las variables. Si se ha observado que aquellos pacientes con un peso alto han sufrido de complicaciones postoperatorias, pero esto puede no ser determinante debido al bajo porcentaje de pacientes que han sufrido de este contratiempo. Además, se observa que los casos de personas no fumadoras y que no han consumido alcohol a lo largo de su vida, no han sufrido de complicaciones postoperatorias o edemas posteriores y han muerto a causa de un tumor.
+* Se observa que el dataset está no está balanceado (46.8% de pacientes muertos a causa de GBM, 39.36% por Malingnant Brain Neoplasm, 8.52% por Malingnant Nervous System Neoplasm, 3.19% por Brain Edema y 2.13% por Postoperative Edema).
+
+* En lo que respecta a los boxplots y barplots empleados, no se observa una clara diferencia entre las variables. Si se ha observado que aquellos pacientes con un peso alto han sufrido de complicaciones postoperatorias, pero esto puede no ser determinante debido al bajo porcentaje de pacientes que han sufrido de este contratiempo. Además, se observa que los casos de personas no fumadoras y que no han consumido alcohol a lo largo de su vida, no han sufrido de complicaciones postoperatorias o edemas posteriores y han muerto a causa de un tumor.
 
 # Análisis de la esperanza de vida
 
@@ -272,7 +275,6 @@ La esperanza de vida se corresponde con los dias que transcurren desde la primer
 
 ```{r EDA life expectancy}
 dataset_life_expect <- dataset_risk
-# dataset_life_expect <- dataset_life_expect[which(dataset_life_expect$vital_status == 'Deceased', arr.ind = TRUE), ]
 
 dataset_life_expect <- dataset_life_expect[, -c(cause_of_death_index, vital_status_index)]
 class_val_index <- which(names(dataset_life_expect) == 'life_expectancy', arr.ind = TRUE)
@@ -318,9 +320,161 @@ featurePlot(y=dataset_life_expect[, non_numeric_var_life_expect[5]],
 plot(density(dataset_life_expect$life_expectancy[which(!is.na(dataset_life_expect$life_expectancy))]), main=names(dataset_life_expect)[class_val_index])
 ```
 
+Para complementar el análisis de la supervivencia, se procede a la creación de modelos de Cox para calcular las probabilidades de supervivencia a 3 años. En un principio, debido a los valores NA que contiene el dataset, se crea una regresión de Cox por cada variable, y así analizar el impacto de cada una de ellas independientemente del resto.
+
+```{r cox survival model}
+dataset_survival <- dataset_risk
+dataset_survival$vital_status <- as.numeric(dataset_survival$vital_status)
+dataset_survival$vital_status[which(dataset_survival$vital_status == 2)] <- 0
+
+cox.model.age <- coxph(Surv(time_monitored, vital_status) ~ age, data = dataset_survival)
+cox.model.gender <- coxph(Surv(time_monitored, vital_status) ~ gender, data = dataset_survival)
+cox.model.bmi <- coxph(Surv(time_monitored, vital_status) ~ bmi, data = dataset_survival)
+cox.model.alcohol <- coxph(Surv(time_monitored, vital_status) ~ alcohol_consumption, data = dataset_survival)
+cox.model.alcohol_years <- coxph(Surv(time_monitored, vital_status) ~ years_high_alcohol_quantity_consumed, data = dataset_survival)
+cox.model.height <- coxph(Surv(time_monitored, vital_status) ~ height_in_cm, data = dataset_survival)
+cox.model.tobacco <- coxph(Surv(time_monitored, vital_status) ~ tobacco_smoking_history, data = dataset_survival)
+cox.model.tobacco_years <- coxph(Surv(time_monitored, vital_status) ~ number_of_pack_years_smoked, data = dataset_survival)
+cox.model.tumor_site <- coxph(Surv(time_monitored, vital_status) ~ tumor_site, data = dataset_survival)
+cox.model.tumor_size <- coxph(Surv(time_monitored, vital_status) ~ tumor_size_in_cm, data = dataset_survival)
+cox.model.weight <- coxph(Surv(time_monitored, vital_status) ~ weight_in_kg, data = dataset_survival)
+
+summary(cox.model.age)
+summary(cox.model.gender)
+summary(cox.model.bmi)
+summary(cox.model.alcohol)
+summary(cox.model.alcohol_years)
+summary(cox.model.height)
+summary(cox.model.tobacco)
+summary(cox.model.tobacco_years)
+summary(cox.model.tumor_site)
+summary(cox.model.tumor_size)
+summary(cox.model.weight)
+
+cox_model_list = list(Age = survfit(cox.model.age), Gender = survfit(cox.model.gender), BMI = survfit(cox.model.bmi), Alcohol_consumption =  survfit(cox.model.alcohol), High_alcohol_consumption_years = survfit(cox.model.alcohol_years), Height = survfit(cox.model.height), Tobacco_consumption = survfit(cox.model.tobacco), Pack_years_smoked = survfit(cox.model.tobacco_years), Tumor_site = survfit(cox.model.tumor_site), Tumor_size = survfit(cox.model.tumor_size), Weight = survfit(cox.model.weight))
+
+for(model_index in 1:length(cox_model_list)){
+  p <- rep(names(cox_model_list)[model_index], length(cox_model_list[[names(cox_model_list)[model_index]]]$time))
+  df <- data.frame(cox_model_list[[names(cox_model_list)[model_index]]]$time, cox_model_list[[names(cox_model_list)[model_index]]]$surv, p)
+  names(df) <- c("Time", "Survival", "Variable")
+  if(exists("df_list")){
+    df_list <- rbind(df_list, df)
+  } else {
+    df_list <- df
+  }
+}
+
+ggplot(df_list, aes(x = Time, y = Survival, color = Variable)) + geom_line() + ylim(0, 1)
+# anova(cox.model.bmi, cox.model.gender, test = "LRT")
+```
+
+La gráfica muestra que la curva más pronunciada y a su vez la que más impacta en la reducción de la probablidad de supervivencia en la correspondiente a la consumición de alcohol.
 
 
-## PREPROCESSING
+?????????????? hau aplikatu? Irakurri Aalen eta Cox modeloen arteko diferentzia zein dan!!!
+```{r aalen survival}
+aalen.model <- aareg(Surv(time_monitored, vital_status) ~ age + gender, data = dataset_survival)
+
+summary(aalen.model)
+
+plot(aalen.model, main = "Aalen model (Age and Gender)")
+```
+
+
+## IMPUTACIÓN DE LAS VARIABLES
+
+Con el objetivo de poder analizar el impacto que todas las variables tienen en la supervivencia del paciente se procede a la imputación de los valores definidos como NA en el dataset. Para la imputación de las variables se emplea el método Predictive Mean Matching (PMM).
+
+```{r}
+# Cantidad de valores NA que hay que imputar
+sum(is.na(dataset_risk))
+
+na_loc <- which(is.na(dataset_risk), arr.ind=TRUE)
+na_loc_colums <- unique(na_loc[,2])
+na_loc_colums <- na_loc_colums[-which(na_loc_colums == life_expectancy_index, arr.ind=TRUE)]
+
+# Variables con valores NA presentes
+names(dataset_risk)[na_loc_colums]
+
+dataset_risk_completed <- dataset_risk[, -life_expectancy_index]
+
+imp_pmm <- mice(dataset_risk_completed, m = 3, method= "pmm", printFlag = FALSE)
+dataset_risk_completed <- complete(imp_pmm)
+
+for(row in 1:dim(dataset_risk_completed)[1]){
+  if(dataset_risk_completed[row, ]$tobacco_smoking_history == "Lifelong non-smoker: Less than 100 cigarettes smoked in lifetime" && dataset_risk_completed[row, ]$number_of_pack_years_smoked != 0) {
+    dataset_risk_completed[row, ]$number_of_pack_years_smoked <- 0
+  } else if(dataset_risk_completed[row, ]$tobacco_smoking_history != "Lifelong non-smoker: Less than 100 cigarettes smoked in lifetime" && dataset_risk_completed[row, ]$number_of_pack_years_smoked == 0){
+    dataset_risk_completed[row, ]$number_of_pack_years_smoked <- NA
+  }
+  if(dataset_risk_completed[row, ]$alcohol_consumption == "Alcohol consumption more than 2 drinks per day for men and more than 1 drink per day for women" && dataset_risk_completed[row, ]$years_high_alcohol_quantity_consumed == 0) {
+    dataset_risk_completed[row, ]$years_high_alcohol_quantity_consumed <- NA
+  } else if(dataset_risk_completed[row, ]$alcohol_consumption == "Lifelong non-drinker" && dataset_risk_completed[row, ]$years_high_alcohol_quantity_consumed != 0){
+    dataset_risk_completed[row, ]$years_high_alcohol_quantity_consumed <- 0
+  }
+}
+
+imp_pmm <- mice(dataset_risk_completed, m = 1, method= "pmm", printFlag = FALSE)
+dataset_risk_completed <- complete(imp_pmm)
+
+# Cantidad de valores NA después de imputar
+print(sum(is.na(dataset_risk_completed)))
+
+dataset_risk_completed$life_expectancy <- dataset_risk$life_expectancy
+```
 
 
 
+
+
+```{r random-forest}
+names(dataset_survival) <- janitor::make_clean_names(names(dataset_survival), use_make_names = TRUE)
+
+r_fit.age <- ranger(Surv(time = time_monitored, event = vital_status) ~ age, data = dataset_survival,
+                     mtry = 1,
+                     importance = "permutation",
+                     splitrule = "extratrees",
+                     verbose = TRUE)
+r_fit.bmi <- ranger(Surv(time = time_monitored, event = vital_status) ~ bmi, data = dataset_survival,
+                     mtry = 1,
+                     importance = "permutation",
+                     splitrule = "extratrees",
+                     verbose = TRUE)
+r_fit.gender <- ranger(Surv(time = time_monitored, event = vital_status) ~ gender, data = dataset_survival,
+                     mtry = 1,
+                     importance = "permutation",
+                     splitrule = "extratrees",
+                     verbose = TRUE)
+r_fit.weight <- ranger(Surv(time = time_monitored, event = vital_status) ~ weight_in_kg, data = dataset_survival,
+                     mtry = 1,
+                     importance = "permutation",
+                     splitrule = "extratrees",
+                     verbose = TRUE)
+r_fit.tumor_site <- ranger(Surv(time = time_monitored, event = vital_status) ~ tumor_site, data = dataset_survival,
+                     mtry = 1,
+                     importance = "permutation",
+                     splitrule = "extratrees",
+                     verbose = TRUE)
+
+r_fit_list <- list(Age = r_fit.age, Gender = r_fit.gender, BMI = r_fit.bmi, Tumor_site = r_fit.tumor_site, Weight = r_fit.weight)
+
+
+death_times <- r_fit.age$unique.death.times 
+rm("df_list")
+for(model_index in 1:length(r_fit_list)){
+  surv_prob <- data.frame(r_fit_list[[names(r_fit_list)[model_index]]][["survival"]])
+  avg_prob <- sapply(surv_prob, mean)
+  
+  p <- rep(names(r_fit_list)[model_index], length(death_times))
+  df <- data.frame(death_times, avg_prob, p)
+  names(df) <- c("Time", "Survival", "Variable")
+  if(exists("df_list")){
+    df_list <- rbind(df_list, df)
+  } else {
+    df_list <- df
+  }
+}
+
+ggplot(df_list, aes(x = Time, y = Survival, color = Variable)) + geom_line() + ylim(0, 1) + xlim(0,  max(dataset_survival$time_monitored))
+
+```
