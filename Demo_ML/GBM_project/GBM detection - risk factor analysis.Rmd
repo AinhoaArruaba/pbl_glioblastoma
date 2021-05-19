@@ -357,15 +357,14 @@ for(model_index in 1:length(cox_model_list)){
   p <- rep(names(cox_model_list)[model_index], length(cox_model_list[[names(cox_model_list)[model_index]]]$time))
   df <- data.frame(cox_model_list[[names(cox_model_list)[model_index]]]$time, cox_model_list[[names(cox_model_list)[model_index]]]$surv, p)
   names(df) <- c("Time", "Survival", "Variable")
-  if(exists("df_list")){
-    df_list <- rbind(df_list, df)
+  if(exists("df_list_cox")){
+    df_list_cox <- rbind(df_list_cox, df)
   } else {
-    df_list <- df
+    df_list_cox <- df
   }
 }
 
-ggplot(df_list, aes(x = Time, y = Survival, color = Variable)) + geom_line() + ylim(0, 1)
-# anova(cox.model.bmi, cox.model.gender, test = "LRT")
+ggplot(df_list_cox, aes(x = Time, y = Survival, color = Variable)) + geom_line() + ylim(0, 1)
 ```
 
 La gráfica muestra que la curva más pronunciada y a su vez la que más impacta en la reducción de la probablidad de supervivencia en la correspondiente a la consumición de alcohol.
@@ -398,7 +397,7 @@ names(dataset_risk)[na_loc_colums]
 
 dataset_risk_completed <- dataset_risk[, -life_expectancy_index]
 
-imp_pmm <- mice(dataset_risk_completed, m = 3, method= "pmm", printFlag = FALSE)
+imp_pmm <- mice(dataset_risk_completed, m = 3, method= "pmm", printFlag = FALSE, seed = 7)
 dataset_risk_completed <- complete(imp_pmm)
 
 for(row in 1:dim(dataset_risk_completed)[1]){
@@ -414,7 +413,7 @@ for(row in 1:dim(dataset_risk_completed)[1]){
   }
 }
 
-imp_pmm <- mice(dataset_risk_completed, m = 1, method= "pmm", printFlag = FALSE)
+imp_pmm <- mice(dataset_risk_completed, m = 1, method= "pmm", printFlag = FALSE, seed = 3)
 dataset_risk_completed <- complete(imp_pmm)
 
 # Cantidad de valores NA después de imputar
@@ -422,15 +421,62 @@ print(sum(is.na(dataset_risk_completed)))
 
 dataset_risk_completed$life_expectancy <- dataset_risk$life_expectancy
 ```
+## REGRESIÓN DE COX
 
+Una vez contamos con el dataset con los valores imputados, procedemos a calcular la regresión de Cox con todas las variables disponibles.
+```{r}
+dataset_survival <- dataset_risk_completed
+dataset_survival$vital_status <- as.numeric(dataset_survival$vital_status)
+dataset_survival$vital_status[which(dataset_survival$vital_status == 2)] <- 0
 
+cox.model.all_vars <- coxph(Surv(time_monitored, vital_status) ~ age + gender + bmi + alcohol_consumption + years_high_alcohol_quantity_consumed + tobacco_smoking_history + number_of_pack_years_smoked + weight_in_kg + tumor_site + tumor_size_in_cm, data = dataset_survival)
+summary(cox.model.all_vars, digits = 3)
+cox.model.all_vars.fit <- survfit(cox.model.all_vars)
 
+df <- data.frame(cox.model.all_vars.fit$time, cox.model.all_vars.fit$surv, "Cox")
+names(df) <- c("Time", "Survival", "Model")
 
+ggplot(df, aes(x = Time, y = Survival, color = Model)) + geom_line() + ylim(0, 1)
 
+anova(cox.model.all_vars)
+```
+
+Mediante los tests ANOVA se ha determinado la relevancia de las variables en el modelo de Cox. La mayoría de ellos no parecen ser relevantes (p < 0.05), estando por debajo de ese valor únicamente las variables de edad, BMI y historial de tabaco (age, bmi y tobacco_smoking_history). Para asegurarnos de que esto se cumple, creamos un segundo modelo de Cox solo con las variables determinadas como relevantes y los resultados de los dos modelos mediante los tests ANOVA.
+
+```{r}
+cox.model.select_vars <- coxph(Surv(time_monitored, vital_status) ~ age + bmi + tobacco_smoking_history, data = dataset_survival)
+# summary(cox.model.select_vars, digits = 3)
+cox.model.select_vars.fit <- survfit(cox.model.select_vars)
+summary(cox.model.select_vars, digits = 3)
+
+df <- data.frame(cox.model.select_vars.fit$time, cox.model.select_vars.fit$surv, "Cox")
+names(df) <- c("Time", "Survival", "Model")
+
+ggplot(df, aes(x = Time, y = Survival, color = Model)) + geom_line() + ylim(0, 1)
+
+# anova(cox.model.select_vars)
+anova(cox.model.select_vars, cox.model.all_vars, test = "LRT")
+```
+
+El test ANOVA muestra un valor p > 0.05 por lo que podemos concluir que la diferencia entre ambos modelos no es relevante, confirmando que las variables seleccionadas son suficiente para calcular el modelo de supervivencia y que son las más determinantes a la hora de predecir las probabilidades de supervivencia del paciente que padece de GBM.
+
+## RANDOM FOREST
+
+Para comparar el modelo de supervivencia obtenido mediante la regresión de Cox con otro modelo se implementa otro modelo basádo en el algoritmo Random Forest. Primero se procede a calcular las curvas de supervivencia por cada una de las variables.
 ```{r random-forest}
 names(dataset_survival) <- janitor::make_clean_names(names(dataset_survival), use_make_names = TRUE)
 
 r_fit.age <- ranger(Surv(time = time_monitored, event = vital_status) ~ age, data = dataset_survival,
+                     mtry = 1,
+                     importance = "permutation",
+                     splitrule = "extratrees",
+                     verbose = TRUE)
+r_fit.alcohol <- ranger(Surv(time = time_monitored, event = vital_status) ~ alcohol_consumption, data = dataset_survival,
+                     mtry = 1,
+                     importance = "permutation",
+                     splitrule = "extratrees",
+                     verbose = TRUE)
+r_fit.high_alcohol <- ranger(Surv(time = time_monitored, event = vital_status) ~ years_high_alcohol_quantity_consumed, data = dataset_survival,
                      mtry = 1,
                      importance = "permutation",
                      splitrule = "extratrees",
@@ -445,6 +491,16 @@ r_fit.gender <- ranger(Surv(time = time_monitored, event = vital_status) ~ gende
                      importance = "permutation",
                      splitrule = "extratrees",
                      verbose = TRUE)
+r_fit.tobacco <- ranger(Surv(time = time_monitored, event = vital_status) ~ tobacco_smoking_history, data = dataset_survival,
+                     mtry = 1,
+                     importance = "permutation",
+                     splitrule = "extratrees",
+                     verbose = TRUE)
+r_fit.tobacco_pack_years <- ranger(Surv(time = time_monitored, event = vital_status) ~ number_of_pack_years_smoked, data = dataset_survival,
+                     mtry = 1,
+                     importance = "permutation",
+                     splitrule = "extratrees",
+                     verbose = TRUE)
 r_fit.weight <- ranger(Surv(time = time_monitored, event = vital_status) ~ weight_in_kg, data = dataset_survival,
                      mtry = 1,
                      importance = "permutation",
@@ -455,12 +511,15 @@ r_fit.tumor_site <- ranger(Surv(time = time_monitored, event = vital_status) ~ t
                      importance = "permutation",
                      splitrule = "extratrees",
                      verbose = TRUE)
+r_fit.tumor_size <- ranger(Surv(time = time_monitored, event = vital_status) ~ tumor_size_in_cm, data = dataset_survival,
+                     mtry = 1,
+                     importance = "permutation",
+                     splitrule = "extratrees",
+                     verbose = TRUE)
 
-r_fit_list <- list(Age = r_fit.age, Gender = r_fit.gender, BMI = r_fit.bmi, Tumor_site = r_fit.tumor_site, Weight = r_fit.weight)
-
+r_fit_list <- list(Age = r_fit.age, Gender = r_fit.gender, BMI = r_fit.bmi, Alcohol_consumption = r_fit.alcohol, High_alcohol_consumption_years =  r_fit.high_alcohol, Tobacco_consumption = r_fit.tobacco, Pack_years_smoked = r_fit.tobacco_pack_years, Tumor_site = r_fit.tumor_site, Tumor_size = r_fit.tumor_size, Weight = r_fit.weight)
 
 death_times <- r_fit.age$unique.death.times 
-rm("df_list")
 for(model_index in 1:length(r_fit_list)){
   surv_prob <- data.frame(r_fit_list[[names(r_fit_list)[model_index]]][["survival"]])
   avg_prob <- sapply(surv_prob, mean)
@@ -476,5 +535,77 @@ for(model_index in 1:length(r_fit_list)){
 }
 
 ggplot(df_list, aes(x = Time, y = Survival, color = Variable)) + geom_line() + ylim(0, 1) + xlim(0,  max(dataset_survival$time_monitored))
+```
+
+Se calcula el modelo de supervivencia de todas las variables y obtenemos las importancias asignadas a cada una de las variables por el modelo.
+```{r}
+
+r_fit.all_vars <- ranger(Surv(time = time_monitored, event = vital_status) ~  age + gender + bmi + alcohol_consumption + years_high_alcohol_quantity_consumed + tobacco_smoking_history + number_of_pack_years_smoked + weight_in_kg + tumor_site + tumor_size_in_cm, data = dataset_survival,
+                     mtry = 5,
+                     importance = "permutation",
+                     splitrule = "extratrees",
+                     verbose = TRUE)
+
+surv_prob <- data.frame(r_fit.all_vars$survival)
+avg_prob_allvars <- sapply(surv_prob, mean)
+
+df <- data.frame(r_fit.all_vars$unique.death.times, avg_prob_allvars, rep("RF", length(r_fit.all_vars$unique.death.times)))
+names(df) <- c("Time", "Survival", "Model")
+
+ggplot(df, aes(x = Time, y = Survival, color = Model)) + geom_line() + ylim(0, 1)
+
+par(mar = c(10, 4, 4, 2) + 0.1)
+barplot(r_fit.all_vars$variable.importance, las = 2, ylim = c(min(r_fit.all_vars$variable.importance), max(r_fit.all_vars$variable.importance)))
+```
+
+Con las 4 variables de más importancia se crea un nuevo modelo de supervivencia.
+
+```{r}
+# Variables a tener en cuenta en el siguiente modelo
+sort(r_fit.all_vars$variable.importance, decreasing = TRUE)[1:4] 
+r_fit.selec_vars <- ranger(Surv(time = time_monitored, event = vital_status) ~  age + tobacco_smoking_history + alcohol_consumption + gender, data = dataset_survival,
+                     mtry = 4,
+                     importance = "permutation",
+                     splitrule = "extratrees",
+                     verbose = TRUE)
+
+surv_prob <- data.frame(r_fit.selec_vars$survival)
+avg_prob_selecvars <- sapply(surv_prob, mean)
+
+df <- data.frame(r_fit.selec_vars$unique.death.times, avg_prob_selecvars, rep("RF", length(r_fit.selec_vars$unique.death.times)))
+names(df) <- c("Time", "Survival", "Model")
+
+ggplot(df, aes(x = Time, y = Survival, color = Model)) + geom_line() + ylim(0, 1)
+
+par(mar = c(10, 4, 4, 2) + 0.1)
+barplot(abs(r_fit.selec_vars$variable.importance), las = 2, ylim = c(0, max(r_fit.selec_vars$variable.importance)))
+```
+## COMPARACIÓN DE LAS CURVAS
+
+Se comparan los 2 modelos obtenidos para todas las variables y sus selecciones, obteniendo un total de 4 modelos de supervivencia distintos.
+
+```{r}
+rf_i <- rep("RF", length(r_fit.all_vars$unique.death.times))
+rf_df <- data.frame(r_fit.all_vars$unique.death.times, avg_prob_allvars, rf_i)
+names(rf_df) <- c("Time","Survival","Model")
+
+rf_selec_i <- rep("RF SELEC. VARS.", length(r_fit.selec_vars$unique.death.times))
+rf_selec_df <- data.frame(r_fit.selec_vars$unique.death.times, avg_prob_selecvars, rf_selec_i)
+names(rf_selec_df) <- c("Time","Survival","Model")
+
+cox_i <- rep("COX", length(cox.model.all_vars.fit$time))
+cox_df <- data.frame(cox.model.all_vars.fit$time, cox.model.all_vars.fit$surv, cox_i)
+names(cox_df) <- c("Time","Survival","Model")
+
+cox_select_i <- rep("COX SELEC. VARS.", length(cox.model.select_vars.fit$time))
+cox_select_df <- data.frame(cox.model.select_vars.fit$time, cox.model.select_vars.fit$surv, cox_select_i)
+names(cox_select_df) <- c("Time","Survival","Model")
+
+models_data_list <- rbind(rf_df, rf_selec_df, cox_df, cox_select_df)
+
+ggplot(models_data_list, aes(x = Time, y = Survival, color = Model)) + geom_line() + ylim(0, 1) + xlim(0,  max(dataset_survival$time_monitored))
 
 ```
+
+
+Conclusiones:

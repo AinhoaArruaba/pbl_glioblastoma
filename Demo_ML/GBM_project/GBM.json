@@ -1114,7 +1114,7 @@
       ],
       "inserted":"2019-05-09T17:22:57.000Z",
       "updated":"2021-03-02T21:18:37.812Z",
-      "tumor_site_other":"Parietal and Temporal Lobe",
+      "tumor_site_other":"Temporal Lobe and Parietal Lobe",
       "discovery_study/analyzed_samples":"Tumor"
    },
    {
@@ -1171,7 +1171,7 @@
       ],
       "inserted":"2019-05-09T17:22:57.000Z",
       "updated":"2021-01-08T00:35:57.942Z",
-      "tumor_site_other":"Parietal, Occipital, Temporal Lobe",
+      "tumor_site_other":"Parietal Lobe and Occipital Lobe and Temporal Lobe",
       "discovery_study/analyzed_samples":"Tumor"
    },
    {
@@ -5605,7 +5605,7 @@
       ],
       "inserted":"2019-05-09T17:22:57.000Z",
       "updated":"2021-01-08T00:36:03.050Z",
-      "tumor_site_other":"Frontal and Parietal Lobe",
+      "tumor_site_other":"Frontal Lobe and Parietal Lobe",
       "discovery_study/analyzed_samples":"Tumor"
    },
    {
@@ -6331,7 +6331,7 @@
       ],
       "inserted":"2019-05-09T17:22:57.000Z",
       "updated":"2021-01-08T00:36:08.012Z",
-      "tumor_site_other":"Hemisphere and Frontal Lobe",
+      "tumor_site_other":"Left Hemisphere and Frontal Lobe",
       "discovery_study/analyzed_samples":"Tumor"
    },
    {
@@ -7023,7 +7023,7 @@
       ],
       "inserted":"2020-01-10T21:47:51.435Z",
       "updated":"2020-09-11T14:45:58.169Z",
-      "tumor_site_other":"frontal-parietal lobe"
+      "tumor_site_other":"Frontal Lobe and Parietal Lobe"
    },
    {
       "tumor_code":"GBM",
@@ -9359,7 +9359,7 @@
       ],
       "inserted":"2020-01-10T21:47:57.495Z",
       "updated":"2020-09-11T14:46:18.458Z",
-      "tumor_site_other":"corpus callosum"
+      "tumor_site_other":"Corpus Callosum"
    },
    {
       "tumor_code":"GBM",
@@ -9415,7 +9415,7 @@
       ],
       "inserted":"2020-01-10T21:47:57.638Z",
       "updated":"2020-09-11T14:46:18.639Z",
-      "tumor_site_other":"ventricle"
+      "tumor_site_other":"Ventricle"
    },
    {
       "tumor_code":"GBM",
@@ -9530,7 +9530,7 @@
       "number_of_years_consumed_more_than_2_drinks_per_day_for_men_or_more_than_1_for_women":40,
       "inserted":"2020-01-10T21:47:57.926Z",
       "updated":"2021-01-08T00:36:08.830Z",
-      "tumor_site_other":"The frontal, temporal and insular lobes"
+      "tumor_site_other":"Frontal Lobe and Temporal Lobe and Insular Lobe"
    },
    {
       "tumor_code":"GBM",
@@ -9647,7 +9647,7 @@
       "number_of_years_consumed_more_than_2_drinks_per_day_for_men_or_more_than_1_for_women":2,
       "inserted":"2020-01-10T21:47:58.211Z",
       "updated":"2021-01-08T00:36:09.169Z",
-      "tumor_site_other":"Temporal and parietal lobes"
+      "tumor_site_other":"Temporal Lobe and Parietal Lobe"
    },
    {
       "tumor_code":"GBM",
@@ -9703,7 +9703,7 @@
       ],
       "inserted":"2020-01-10T21:47:58.361Z",
       "updated":"2020-09-11T14:46:19.512Z",
-      "tumor_site_other":"parietal and occipital lobes"
+      "tumor_site_other":"Parietal Lobe and Occipital Lobe"
    },
    {
       "tumor_code":"GBM",
@@ -9760,7 +9760,7 @@
       ],
       "inserted":"2020-01-10T21:47:58.500Z",
       "updated":"2021-01-08T00:36:09.376Z",
-      "tumor_site_other":"Temporal and parietal lobes"
+      "tumor_site_other":"Temporal Lobe and Parietal Lobe"
    },
    {
       "tumor_code":"GBM",
@@ -9820,7 +9820,7 @@
       ],
       "inserted":"2020-01-10T21:47:58.646Z",
       "updated":"2021-01-08T00:36:09.593Z",
-      "tumor_site_other":"Frontal lobe and corpus callosum"
+      "tumor_site_other":"Frontal lobe and Corpus Callosum"
    },
    {
       "tumor_code":"GBM",
@@ -10569,6 +10569,6 @@
       ],
       "inserted":"2020-11-07T03:15:10.046Z",
       "updated":"2021-03-02T21:18:36.698Z",
-      "tumor_site_other":"temporal and parietal lobe"
+      "tumor_site_other":"Temporal Lobe and Parietal Lobe"
    }
 ]

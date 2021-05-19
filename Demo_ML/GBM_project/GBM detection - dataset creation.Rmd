@@ -153,6 +153,9 @@ for(row in 1:dim(dataset)[1]){
   if(!is.na(dataset[row, ]$tumor_site) && !is.na(dataset[row, ]$tumor_site_other) && dataset[row, ]$tumor_site == 'Other'){
     dataset[row, ]$tumor_site <- levels(dataset$tumor_site_other)[dataset[row, ]$tumor_site_other]
   }
+  if(!is.na(dataset[row, ]$tumor_site) && dataset[row, ]$tumor_site == 'Other'){
+    dataset[row, ]$tumor_site <- NA
+  }
 }
 
 dataset[,"time_monitored"] <- NA
