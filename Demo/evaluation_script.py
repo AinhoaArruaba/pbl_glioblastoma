@@ -9,6 +9,9 @@ import matplotlib.pyplot as plt
 import img_processing_functions as img_func
 import utils.img_utils as img_utils
 
+import warnings
+warnings.filterwarnings("ignore")
+
 
 def load_subject_data(folder_path, mask=False, display=False):
     if not mask:
@@ -141,7 +144,6 @@ if __name__ == "__main__":
     subject_brainmask_ground_truth = {}
     for subject_path in subject_path_list:
         subject_id = os.path.basename(subject_path)
-        print(subject_id)
         # Read brain volume
         subject_img[subject_id] = {}
         subject_img[subject_id]['t1'] = load_subject_data(subject_path)
@@ -151,15 +153,13 @@ if __name__ == "__main__":
             subject_path, mask=True)
         subject_ids.append(subject_id)
 
-    mri_slices_stand = img_func.mri_standarization(
-        subject_img, subject_ids, 'landmarks_eval.txt', False)
-
     subject_brainmasks_mcstrip = {}
     subject_masked_slices = {}
     for s in subject_ids:
+        print(subject_id)
         # Compute brain mask with McStrip algorithm
         subject_brainmasks_mcstrip[s],  subject_masked_slices = img_func.image_skull_strip(
-            mri_slices_stand[s]['t1'], False)
+            subject_img[s]['t1'], False)
         img_utils.plot_stack(subject_id, subject_masked_slices)
         metrics.append(calc_metrics(
             s, subject_brainmasks_mcstrip[s], subject_brainmask_ground_truth[s]['t1']))

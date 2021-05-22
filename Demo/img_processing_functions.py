@@ -257,7 +257,7 @@ def __get_consensus_mask(coarse_masks, thresh_masks, kmeans_mask, bse_masks):
             for col in range(consensus_mask.shape[2]):
                 vals = [thresh_masks[index, row, col],
                         kmeans_mask[index, row, col]*2, bse_masks[index, row, col]]
-                if (coarse_masks[index, row, col] and sum(vals) > 2):
+                if (coarse_masks[index, row, col] and sum(vals) > 1):
                     consensus_mask[index, row, col] = True
                 else:
                     consensus_mask[index, row, col] = False
