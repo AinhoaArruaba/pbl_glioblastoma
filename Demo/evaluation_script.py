@@ -6,8 +6,11 @@ import scipy.spatial.distance as distance
 import openpyxl
 import matplotlib.pyplot as plt
 
-import Demo.img_processing_functions as img_func
-import Demo.utils.img_utils as img_utils
+import img_processing_functions as img_func
+import utils.img_utils as img_utils
+
+import warnings
+warnings.filterwarnings("ignore")
 
 
 def load_subject_data(folder_path, mask=False, display=False):
@@ -128,29 +131,39 @@ if __name__ == "__main__":
     # Generate comparation figure with 3 subjects -> boxplot
 
     # READ DATABASE
-    # eval_database_path = os.path.join(os.path.dirname(
-    #     os.path.abspath(__file__)), "database_eval")
-    # subject_path_list = [os.path.join(eval_database_path, folder) for folder in os.listdir(
-    #     eval_database_path) if os.path.isdir(os.path.join(eval_database_path, folder))]
-    # subject_path_list.sort()
+    eval_database_path = os.path.join(os.path.dirname(
+        os.path.abspath(__file__)), "database_eval")
+    subject_path_list = [os.path.join(eval_database_path, folder) for folder in os.listdir(
+        eval_database_path) if os.path.isdir(os.path.join(eval_database_path, folder))]
+    subject_path_list.sort()
 
-    xlsx_path = "eval_results.xlsx"
-    # metrics = []
-    # for subject_path in subject_path_list:
-    #     subject_id = os.path.basename(subject_path)
-    #     print(subject_id)
-    #     # Read brain volume
-    #     subject_img = load_subject_data(subject_path)
-    #     # Read brain mask
-    #     subject_brainmask_ground_truth = load_subject_data(
-    #         subject_path, mask=True)
-    #     # Compute brain mask with McStrip algorithm
-    #     subject_brainmasks_mcstrip,  subject_masked_slices = img_func.image_preprocessing(
-    #         subject_img)
-    #     # img_utils.plot_stack(subject_id, subject_masked_slices)
-    #     metrics.append(calc_metrics(
-    #         subject_id, subject_brainmasks_mcstrip, subject_brainmask_ground_truth))
+    xlsx_path = "evaluation/eval_results.xlsx"
+    metrics = []
+    subject_ids = []
+    subject_img = {}
+    subject_brainmask_ground_truth = {}
+    for subject_path in subject_path_list:
+        subject_id = os.path.basename(subject_path)
+        # Read brain volume
+        subject_img[subject_id] = {}
+        subject_img[subject_id]['t1'] = load_subject_data(subject_path)
+        # Read brain mask
+        subject_brainmask_ground_truth[subject_id] = {}
+        subject_brainmask_ground_truth[subject_id]['t1'] = load_subject_data(
+            subject_path, mask=True)
+        subject_ids.append(subject_id)
 
-    # save_metrics_excel(metrics, xlsx_path)
+    subject_brainmasks_mcstrip = {}
+    subject_masked_slices = {}
+    for s in subject_ids:
+        print(subject_id)
+        # Compute brain mask with McStrip algorithm
+        subject_brainmasks_mcstrip[s],  subject_masked_slices = img_func.image_skull_strip(
+            subject_img[s]['t1'], False)
+        img_utils.plot_stack(subject_id, subject_masked_slices)
+        metrics.append(calc_metrics(
+            s, subject_brainmasks_mcstrip[s], subject_brainmask_ground_truth[s]['t1']))
+
+    save_metrics_excel(metrics, xlsx_path)
     # print(metrics)
     create_boxplots(xlsx_path)

@@ -4,6 +4,69 @@ import nibabel as nib
 import utils.img_utils as img_utils
 import img_processing_functions as img_func
 import evaluation_script
+import dicom_file_handler as dicom_handler
+
+from scipy.signal import find_peaks
+
+dataset_stand_path = os.path.join(os.path.dirname(
+    os.path.abspath(__file__)), "dataset_standarized")
+database_path = os.path.join(os.path.dirname(
+    os.path.abspath(__file__)), "database")
+
+s = 'C3L-00016'
+img_types = ['t1', 't1c', 't2', 'flair']
+scan_folder = dicom_handler.identify_scan_folder(
+    os.path.join(database_path, s))
+
+mri_slices_dicom = {}
+raw_slices = {}
+for folder in scan_folder[1]:
+    if folder in img_types:
+        print("MRI type -> " + folder)
+        subject_folder = os.path.join(scan_folder[0], folder)
+        mri_slices_dicom[folder] = dicom_handler.load_subject_scan(
+            os.path.join(scan_folder[0], folder))
+
+        raw_slices[folder] = dicom_handler.extract_raw_img_array(
+            mri_slices_dicom[folder])
+
+mri_slices_dicom_stand = {}
+raw_slices_stand = {}
+
+for mri_type in os.listdir(os.path.join(dataset_stand_path, s)):
+    if mri_type in img_types:
+        print("MRI type -> " + mri_type)
+        mri_slices_dicom_stand[mri_type] = dicom_handler.load_subject_scan(
+            os.path.join(dataset_stand_path, s, mri_type))
+        raw_slices_stand[mri_type] = dicom_handler.extract_raw_img_array(
+            mri_slices_dicom_stand[mri_type])
+n_slc = 14
+figuras_plot_stand = np.zeros(
+    (8, raw_slices_stand['t1'].shape[1], raw_slices_stand['t1'].shape[2]))
+figuras_plot_stand[0, :, :] = raw_slices[img_types[0]][n_slc, :, :]
+figuras_plot_stand[1, :, :] = raw_slices_stand[img_types[0]][n_slc, :, :]
+figuras_plot_stand[2, :, :] = raw_slices[img_types[1]][n_slc, :, :]
+figuras_plot_stand[3, :, :] = raw_slices_stand[img_types[1]][n_slc, :, :]
+figuras_plot_stand[4, :, :] = raw_slices[img_types[2]][n_slc, :, :]
+figuras_plot_stand[5, :, :] = raw_slices_stand[img_types[2]][n_slc, :, :]
+figuras_plot_stand[6, :, :] = raw_slices[img_types[3]][20, :, :]
+figuras_plot_stand[7, :, :] = raw_slices_stand[img_types[3]][20, :, :]
+
+img_utils.plot_stack_documentation_img(
+    'Imágenes estandarizadas', figuras_plot_stand,
+    ['T1', 'T1 estandarizada', 'T1C', 'T1C estandarizada', 'T2',
+        'T2 estandarizada', 'FLAIR', 'FLAIR estandarizada'],
+    rows=4, cols=2)
+
+for mri_type in img_types:
+    m1 = np.min(raw_slices[mri_type])
+    m2 = np.max(raw_slices[mri_type])
+    [hist, edges] = np.histogram(raw_slices[mri_type], bins=m2)
+    p1 = np.percentile(raw_slices[mri_type], 0)
+    p2 = np.percentile(raw_slices[mri_type], 0.98)
+    peaks = find_peaks(hist, prominence=1, width=3,
+                       height=700, distance=3)
+    img_utils.plot_hist_peaks(s, hist, peaks)
 
 eval_database_path = os.path.join(os.path.dirname(
     os.path.abspath(__file__)), "database_eval", "IBSR_04")

@@ -140,3 +140,13 @@ Demo/dataset*/*
 # Sonarqube folder
 Demo/.scannerwork
 .Rproj.user
+
+# History files
+.Rhistory
+.Rapp.history
+
+# Session Data files
+.RData
+
+# User-specific files
+.Ruserdata

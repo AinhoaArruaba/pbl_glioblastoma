@@ -40,7 +40,7 @@ def plot_hist_thresholds(img, thresholds):
     plt.show()
 
 
-def plot_stack(subject, img, rows=6, cols=4, start_with=0):
+def plot_stack(subject, img, rows=6, cols=4, start_with=0, block=True):
     show_every = round(img.shape[0]/(rows*cols))
     fig, ax = plt.subplots(rows, cols, figsize=[12, 12])
     for i in range(rows*cols):
@@ -61,7 +61,12 @@ def plot_stack(subject, img, rows=6, cols=4, start_with=0):
             ax[ind].axis('off')
 
     fig.suptitle(subject)
-    plt.show()
+    if block:
+        plt.show()
+    else:
+        plt.show(block=block)
+        plt.pause(10)
+        plt.close()
 
 def save_stack_contours(fig_name, s, mri_slices_preprocessed, 
     mri_slices_masks, rows=6, cols=4, start_with=0):
