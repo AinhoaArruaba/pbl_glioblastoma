@@ -373,14 +373,14 @@ if not os.path.exists(dataset_features):
             raw_slices_masks[s][mri_type] = dicom_handler.extract_raw_img_array(
                 mri_slices_dicom_masks[s][mri_type])
 
-            if mri_type == 't1c' or mri_type == 't1':
-                seg.extract_features(raw_slices[s][mri_type], raw_slices_masks[s][mri_type])
+            #if mri_type == 't1c' or mri_type == 't1':
+                #seg.extract_features(raw_slices[s][mri_type], raw_slices_masks[s][mri_type])
 
-            if mri_type == 't2':
+            #if mri_type == 't2':
+                #seg.extract_features(raw_slices[s][mri_type], raw_slices_masks[s][mri_type])
 
-
-            if mri_type == 'flair':
-
+            #if mri_type == 'flair':
+                #seg.extract_features(raw_slices[s][mri_type], raw_slices_masks[s][mri_type])
 
             subject_folders[s][mri_type] = os.path.join(
                 database_path, s, mri_type)
