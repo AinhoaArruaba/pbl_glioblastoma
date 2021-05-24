@@ -79,6 +79,7 @@ def __get_brain_kmeans_mask(raw_slices, coarse_masks):
         kmeans_mask = kmeans_mask + \
             np.where(all_labels == regions[0].label, 1, 0)
 
+    kmeans_mask = kmeans_mask.astype(np.int16)
     kmeans_mask = morphology.erosion(kmeans_mask, morphology.ball(2))
 
     for index in enumerate(kmeans_mask):
@@ -289,8 +290,10 @@ def apply_mask(raw_slices, mask):
 
 def image_skull_strip(raw_slices, display=False):
     masks = __skull_strip_mcstrip_algorithm(raw_slices, display)
+    masks['consensus'] = masks['consensus'].astype(np.int16)
 
     no_skull_slices = apply_mask(raw_slices, masks["consensus"])
+    no_skull_slices = no_skull_slices.astype(np.int16)
     return masks, no_skull_slices
 
 

@@ -33,11 +33,33 @@ def save_subject_scan(raw_slices, subject, scan_path, scan_type, new_folder):
         slice_thickness = np.abs(
             slices[0].SliceLocation - slices[1].SliceLocation)
 
-    os.mkdir(os.path.join(new_folder, subject, scan_type))
+    if not os.path.exists(os.path.join(new_folder, subject, scan_type)):
+        os.mkdir(os.path.join(new_folder, subject, scan_type))
 
     for index in enumerate(slices):
         slices[index[0]].SliceThickness = slice_thickness
         slices[index[0]].PixelData = raw_slices[index[0], :, :].tobytes()
+
+        slices[index[0]].save_as(os.path.join(
+            new_folder, subject, scan_type, 'slice_' + str(index[0]) + '.dcm'))
+
+def save_subject_scan_seg(raw_slices, subject, scan_path, scan_type, new_folder):
+    slices = [dicom.read_file(scan_path + '/' + s)
+              for s in os.listdir(scan_path)]
+    slices.sort(key=lambda x: int(x.InstanceNumber))
+    try:
+        slice_thickness = np.abs(
+            slices[0].ImagePositionPatient[2] - slices[1].ImagePositionPatient[2])
+    except:
+        slice_thickness = np.abs(
+            slices[0].SliceLocation - slices[1].SliceLocation)
+
+    if not os.path.exists(os.path.join(new_folder, subject, scan_type)):
+        os.mkdir(os.path.join(new_folder, subject, scan_type))
+
+    for index in enumerate(slices):
+        slices[index[0]].SliceThickness = slice_thickness
+        slices[index[0]].PixelData = raw_slices[index[0]].tobytes()
 
         slices[index[0]].save_as(os.path.join(
             new_folder, subject, scan_type, 'slice_' + str(index[0]) + '.dcm'))
@@ -65,7 +87,7 @@ def identify_scan_folder(path):
     study_folder = None
 
     if subject_studies:
-        if len(subject_studies) > 1:
+        if len(subject_studies) > 0:
             dates = []
             for index, study in enumerate(subject_studies):
                 match = re.search(r'\d{2}-\d{2}-\d{4}', study)
