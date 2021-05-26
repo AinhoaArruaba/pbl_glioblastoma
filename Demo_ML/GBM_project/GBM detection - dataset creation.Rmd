@@ -169,9 +169,34 @@ for(row in 1:dim(dataset)[1]){
   } else if(!is.na(dataset[row, ]$days_from_initial_diagnosis_to_last_contact_at_12months_follow_up)){
     dataset[row, ]$time_monitored <- dataset[row, ]$days_from_initial_diagnosis_to_last_contact_at_12months_follow_up
   }
+  
+  if(!is.na(dataset[row, ]$time_monitored) && dataset[row, ]$time_monitored > 365 * 3){
+    dataset[row, ]$time_monitored <- 365
+  }
 }
 
+dataset[,"life_expectancy"] <- NA
+for(row in 1:dim(dataset)[1]){
+  if(!is.na(dataset[row, ]$days_from_initial_pathologic_diagnosis_to_death_at_12months_follow_up)){
+    dataset[row, ]$life_expectancy <- dataset[row, ]$days_from_initial_pathologic_diagnosis_to_death_at_12months_follow_up
+  } else if(!is.na(dataset[row, ]$days_from_initial_pathologic_diagnosis_to_death_at_24months_follow_up)){
+    dataset[row, ]$life_expectancy <- dataset[row, ]$days_from_initial_pathologic_diagnosis_to_death_at_24months_follow_up
+  } else if(!is.na(dataset[row, ]$days_from_initial_pathologic_diagnosis_to_death_at_36months_follow_up)){
+    dataset[row, ]$life_expectancy <- dataset[row, ]$days_from_initial_pathologic_diagnosis_to_death_at_36months_follow_up
+  }else if(!is.na(dataset[row, ]$days_from_initial_pathologic_diagnosis_to_death_at_48months_follow_up)){
+    dataset[row, ]$life_expectancy <- dataset[row, ]$days_from_initial_pathologic_diagnosis_to_death_at_48months_follow_up
+  }
+  
+  if(!is.na(dataset[row, ]$life_expectancy) && dataset[row, ]$life_expectancy < 0){
+    dataset[row, ]$life_expectancy <- dataset[row, ]$time_monitored
+  }
+}
 
+for(row in 1:dim(dataset)[1]){
+  if(!is.na(dataset[row, ]$life_expectancy) && !is.na(dataset[row, ]$time_monitored) && dataset[row, ]$life_expectancy > dataset[row, ]$time_monitored){
+    dataset[row, ]$time_monitored <- dataset[row, ]$life_expectancy
+  }
+}
 
 dataset <- dataset[, -which(names(dataset) == 'days_from_initial_diagnosis_to_last_contact_at_24months_follow_up', arr.ind = TRUE)]
 dataset <- dataset[, -which(names(dataset) == 'days_from_initial_diagnosis_to_last_contact_at_36months_follow_up', arr.ind = TRUE)]
@@ -243,18 +268,6 @@ dataset_risk <- dataset_risk[-which(dataset_risk$cause_of_death == 'Other', arr.
 dataset_risk <- dataset_risk[-which(dataset_risk$cause_of_death == 'Pneumonia', arr.ind = TRUE),]
 
 dataset_risk$cause_of_death <- as.factor(dataset_risk$cause_of_death)
-dataset_risk[,"life_expectancy"] <- NA
-for(row in 1:dim(dataset_risk)[1]){
-  if(!is.na(dataset_risk[row, ]$days_from_initial_pathologic_diagnosis_to_death_at_12months_follow_up)){
-    dataset_risk[row, ]$life_expectancy <- dataset_risk[row, ]$days_from_initial_pathologic_diagnosis_to_death_at_12months_follow_up
-  } else if(!is.na(dataset_risk[row, ]$days_from_initial_pathologic_diagnosis_to_death_at_24months_follow_up)){
-    dataset_risk[row, ]$life_expectancy <- dataset_risk[row, ]$days_from_initial_pathologic_diagnosis_to_death_at_24months_follow_up
-  } else if(!is.na(dataset_risk[row, ]$days_from_initial_pathologic_diagnosis_to_death_at_36months_follow_up)){
-    dataset_risk[row, ]$life_expectancy <- dataset_risk[row, ]$days_from_initial_pathologic_diagnosis_to_death_at_36months_follow_up
-  }else if(!is.na(dataset_risk[row, ]$days_from_initial_pathologic_diagnosis_to_death_at_48months_follow_up)){
-    dataset_risk[row, ]$life_expectancy <- dataset_risk[row, ]$days_from_initial_pathologic_diagnosis_to_death_at_48months_follow_up
-  }
-}
 
 dataset_risk <- dataset_risk[, -which(names(dataset_risk) == 'days_from_initial_diagnosis_to_last_contact_at_12months_follow_up', arr.ind = TRUE)]
 dataset_risk <- dataset_risk[, -which(names(dataset_risk) == 'days_from_initial_pathologic_diagnosis_to_death_at_12months_follow_up', arr.ind = TRUE)]

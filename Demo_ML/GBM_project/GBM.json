@@ -8830,8 +8830,8 @@
       "tobacco_smoking_history":"Lifelong non-smoker: Less than 100 cigarettes smoked in lifetime",
       "tumor_status_at_12months_follow_up":"With Tumor",
       "cause_of_death_at_12months_follow_up":"Malignant Nervous System Neoplasm",
-      "days_from_initial_diagnosis_to_last_contact_at_12months_follow_up":"-76",
-      "days_from_initial_pathologic_diagnosis_to_death_at_12months_follow_up":"-76.0",
+      "days_from_initial_diagnosis_to_last_contact_at_12months_follow_up":289,
+      "days_from_initial_pathologic_diagnosis_to_death_at_12months_follow_up":289,
       "specimens":[
          {
             "specimen_id":"C3N-03480-31",
