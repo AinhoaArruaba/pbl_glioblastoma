@@ -5,6 +5,7 @@ app.py
 # Developed modules
 import dicom_file_handler as dicom_handler
 import segmentation as seg
+import feature_extraction as fe
 import img_processing_functions as img_func
 import utils.img_utils as img_utils
 import numpy as np
@@ -12,6 +13,7 @@ import numpy as np
 # Python libraries
 import os
 import warnings
+import csv
 
 warnings.filterwarnings("ignore")
 
@@ -23,6 +25,12 @@ dataset_segmentation_masks_validated = 'dataset_segmentation_masks_validated'
 dataset_segmentation_contours = 'dataset_segmentation_contours'
 dataset_features = 'dataset_features'
 img_types = ['t1', 't1c', 't2', 'flair']
+
+column_names = ["Subject", "mri_type", "tumor_volume", "dist_x", "dist_y", "compactness",
+	"uf", "std", "var", "skewness", "kur", "ent", "smoothness", 
+	"uniformity", "glcm_contrast", "glcm_dissimilarity", "glcm_homogeneity",
+	"glcm_energy", "glcm_correlation", "glcm_ASM", "Hu_1", "Hu_2", "Hu_3",
+	"Hu_4", "Hu_5", "Hu_6", "Hu_7"]
 
 ##############################################################
 #################### STANDARDIZE DATASET #####################
@@ -81,57 +89,58 @@ if not os.path.exists(dataset_no_skull):
     mri_slices_noskull = {}
     subject_folders = {}
 
-print("MRI skull-stripping started")
-mri_slices_dicom = {}
-raw_slices = {}
-mri_slices_noskull = {}
-subject_folders = {}
+    print("MRI skull-stripping started")
+    mri_slices_dicom = {}
+    raw_slices = {}
+    mri_slices_noskull = {}
+    subject_folders = {}
 
-# Obtain subject list
-database_path = os.path.join(os.path.dirname(
-    os.path.abspath(__file__)), dataset_stand)
-subjects = dicom_handler.get_subject_list(database_path)
+    # Obtain subject list
+    database_path = os.path.join(os.path.dirname(
+        os.path.abspath(__file__)), dataset_stand)
+    subjects = dicom_handler.get_subject_list(database_path)
 
-# Extract skull
-for s in subjects:
-    print("Reading subject " + s)
-    if not s.lower() == '.ds_store':
-        mri_slices_dicom[s] = {}
-        raw_slices[s] = {}
-        subject_folders[s] = {}
-        mri_slices_noskull[s] = {}
+    # Extract skull
+    for s in subjects:
+        print("Reading subject " + s)
+        if not s.lower() == '.ds_store':
+            mri_slices_dicom[s] = {}
+            raw_slices[s] = {}
+            subject_folders[s] = {}
+            mri_slices_noskull[s] = {}
 
-        for mri_type in os.listdir(os.path.join(database_path, s)):
-            if mri_type in img_types:
-                if not os.path.exists(os.path.join(dataset_no_skull, s, mri_type)):
-                    print("Skull-stripping for MRI type " + mri_type.upper())
-                    mri_slices_dicom[s][mri_type] = dicom_handler.load_subject_scan(
-                        os.path.join(database_path, s, mri_type))
-                    raw_slices[s][mri_type] = dicom_handler.extract_raw_img_array(
-                        mri_slices_dicom[s][mri_type])
-                    mri_slices_noskull[s][mri_type] = img_func.image_skull_strip(
-                        raw_slices[s][mri_type], False)
-                    img_utils.plot_stack(s + " " + mri_type, np.array(
-                        mri_slices_noskull[s][mri_type][1]), block=False)
-                    subject_folders[s][mri_type] = os.path.join(
-                        database_path, s, mri_type)
+            for mri_type in os.listdir(os.path.join(database_path, s)):
+                if mri_type in img_types:
+                    if not os.path.exists(os.path.join(dataset_no_skull, s, mri_type)):
+                        print("Skull-stripping for MRI type " + mri_type.upper())
+                        mri_slices_dicom[s][mri_type] = dicom_handler.load_subject_scan(
+                            os.path.join(database_path, s, mri_type))
+                        raw_slices[s][mri_type] = dicom_handler.extract_raw_img_array(
+                            mri_slices_dicom[s][mri_type])
+                        mri_slices_noskull[s][mri_type] = img_func.image_skull_strip(
+                            raw_slices[s][mri_type], False)
+                        img_utils.plot_stack(s + " " + mri_type, np.array(
+                            mri_slices_noskull[s][mri_type][1]), block=False)
+                        subject_folders[s][mri_type] = os.path.join(
+                            database_path, s, mri_type)
 
-if not os.path.exists(dataset_no_skull):
-    os.mkdir(dataset_no_skull)
-database_path = os.path.join(os.path.dirname(
-    os.path.abspath(__file__)), dataset_no_skull)
+    if not os.path.exists(dataset_no_skull):
+        os.mkdir(dataset_no_skull)
+    database_path = os.path.join(os.path.dirname(
+        os.path.abspath(__file__)), dataset_no_skull)
 
-print("Saving skull-stripped MRI images")
-for s in subjects:
-    if not os.path.exists(os.path.join(dataset_no_skull, s)):
-        os.mkdir(os.path.join(dataset_no_skull, s))
-        for mri_type in subject_folders[s]:
-            dicom_handler.save_subject_scan(
-                mri_slices_noskull[s][mri_type][1], s, subject_folders[s][mri_type], mri_type, dataset_no_skull)
+    print("Saving skull-stripped MRI images")
+    for s in subjects:
+        if not os.path.exists(os.path.join(dataset_no_skull, s)):
+            os.mkdir(os.path.join(dataset_no_skull, s))
+            for mri_type in subject_folders[s]:
+                dicom_handler.save_subject_scan(
+                    mri_slices_noskull[s][mri_type][1], s, subject_folders[s][mri_type], mri_type, dataset_no_skull)
 
 ##############################################################
 ################# SEGMENT TUMOR AND EDEMA ####################
 if not os.path.exists(dataset_segmentation):
+    print("Tumor segmentation started")
     mri_slices_dicom = {}
     raw_slices = {}
     mri_slices_tumor_segmented = {}
@@ -147,42 +156,46 @@ if not os.path.exists(dataset_segmentation):
 
     # Segmentation
     for s in subjects:
-        mri_slices_dicom[s] = {}
-        raw_slices[s] = {}
-        subject_folders[s] = {}
-        mri_slices_tumor_segmented[s] = {}
-        mri_slices_tumor_masks[s] = {}
-        mri_slices_tumor_masks_validated[s] = {}
-        m_t_A_t2[s] = []
+        print("Reading subject " + s)
+        if not s.lower() == '.ds_store':
+            mri_slices_dicom[s] = {}
+            raw_slices[s] = {}
+            subject_folders[s] = {}
+            mri_slices_tumor_segmented[s] = {}
+            mri_slices_tumor_masks[s] = {}
+            mri_slices_tumor_masks_validated[s] = {}
+            m_t_A_t2[s] = []
 
-        # Get mri types and reverse it to analyse t2 before flair
-        found_mri_types = os.listdir(os.path.join(database_path, s))
-        found_mri_types = found_mri_types[::-1]
+            # Get mri types and reverse it to analyse t2 before flair
+            found_mri_types = os.listdir(os.path.join(database_path, s))
+            found_mri_types = found_mri_types[::-1]
 
-        for mri_type in found_mri_types:
-            mri_slices_dicom[s][mri_type] = dicom_handler.load_subject_scan(
-                os.path.join(database_path, s, mri_type))
-            raw_slices[s][mri_type] = dicom_handler.extract_raw_img_array(
-                mri_slices_dicom[s][mri_type])
+            for mri_type in os.listdir(os.path.join(database_path, s)):
+                if mri_type in img_types:
+                    if not os.path.exists(os.path.join(dataset_segmentation, s, mri_type)):
+                        mri_slices_dicom[s][mri_type] = dicom_handler.load_subject_scan(
+                            os.path.join(database_path, s, mri_type))
+                        raw_slices[s][mri_type] = dicom_handler.extract_raw_img_array(
+                            mri_slices_dicom[s][mri_type])
 
-            #if mri_type == 't1c' or mri_type == 't1':
-             #   mri_slices_tumor_segmented[s][mri_type], mri_slices_tumor_masks[s][mri_type], mri_slices_tumor_masks_validated[s][mri_type] = seg.get_tumor_segmentation(
-              #      raw_slices[s][mri_type], False)
+                        if mri_type == 't1c' or mri_type == 't1':
+                            mri_slices_tumor_segmented[s][mri_type], mri_slices_tumor_masks[s][mri_type], mri_slices_tumor_masks_validated[s][mri_type] = seg.get_tumor_segmentation(
+                                raw_slices[s][mri_type], False)
 
-            if mri_type == 't2':
-                #m_t_A_t2[s] = seg.get_t2_mask(
-                 #   raw_slices[s][mri_type], False)
-                    mri_slices_tumor_segmented[s][mri_type], mri_slices_tumor_masks[s][mri_type], mri_slices_tumor_masks_validated[s][mri_type] = seg.get_tumor_segmentation(
-                        raw_slices[s][mri_type], False)
+                        #if mri_type == 't2':
+                            #m_t_A_t2[s] = seg.get_t2_mask(
+                            #   raw_slices[s][mri_type], False)
+                                #mri_slices_tumor_segmented[s][mri_type], mri_slices_tumor_masks[s][mri_type], mri_slices_tumor_masks_validated[s][mri_type] = seg.get_tumor_segmentation(
+                                #   raw_slices[s][mri_type], False)
 
-            if mri_type == 'flair':
-                #mri_slices_tumor_segmented[s][mri_type], mri_slices_tumor_masks[s][mri_type] = seg.get_edema_segmentation(
-                 #   raw_slices[s][mri_type], m_t_A_t2[s], False)
-                mri_slices_tumor_segmented[s][mri_type], mri_slices_tumor_masks[s][mri_type], mri_slices_tumor_masks_validated[s][mri_type] = seg.get_tumor_segmentation(
-                    raw_slices[s][mri_type], False)
+                        #if mri_type == 'flair':
+                            #mri_slices_tumor_segmented[s][mri_type], mri_slices_tumor_masks[s][mri_type] = seg.get_edema_segmentation(
+                            #   raw_slices[s][mri_type], m_t_A_t2[s], False)
+                            #mri_slices_tumor_segmented[s][mri_type], mri_slices_tumor_masks[s][mri_type], mri_slices_tumor_masks_validated[s][mri_type] = seg.get_tumor_segmentation(
+                            #   raw_slices[s][mri_type], False)
 
-            subject_folders[s][mri_type] = os.path.join(
-                database_path, s, mri_type)
+                        subject_folders[s][mri_type] = os.path.join(
+                            database_path, s, mri_type)
 
     if not os.path.exists(dataset_segmentation):
         os.mkdir(dataset_segmentation)
@@ -216,6 +229,7 @@ if not os.path.exists(dataset_segmentation):
 ##############################################################
 ###################### VALIDATE MASKS ########################
 if not os.path.exists(dataset_segmentation_masks_validated):
+    print("Mask validation started")
     mri_slices_dicom = {}
     raw_slices = {}
     mri_slices_tumor_masks = {}
@@ -233,34 +247,38 @@ if not os.path.exists(dataset_segmentation_masks_validated):
 
     # Validation
     for s in subjects:
-        mri_slices_dicom[s] = {}
-        raw_slices[s] = {}
-        subject_folders[s] = {}
-        mri_slices_tumor_masks[s] = {}
-        raw_slices_masks[s] = {}
-        mri_slices_tumor_masks_validated[s] = {}
-        mri_slices_segmented[s] = {}
+        print("Reading subject " + s)
+        if not s.lower() == '.ds_store':
+            mri_slices_dicom[s] = {}
+            raw_slices[s] = {}
+            subject_folders[s] = {}
+            mri_slices_tumor_masks[s] = {}
+            raw_slices_masks[s] = {}
+            mri_slices_tumor_masks_validated[s] = {}
+            mri_slices_segmented[s] = {}
 
-        found_mri_types = os.listdir(os.path.join(database_path, s))
-        found_mri_types = found_mri_types[::-1]
+            found_mri_types = os.listdir(os.path.join(database_path, s))
+            found_mri_types = found_mri_types[::-1]
 
-        for mri_type in found_mri_types:
-            mri_slices_dicom[s][mri_type] = dicom_handler.load_subject_scan(
-                os.path.join(database_path, s, mri_type))
-            raw_slices[s][mri_type] = dicom_handler.extract_raw_img_array(
-                mri_slices_dicom[s][mri_type])
+            for mri_type in os.listdir(os.path.join(database_path, s)):
+                if mri_type in img_types:
+                    if not os.path.exists(os.path.join(dataset_segmentation_masks_validated, s, mri_type)):
+                        mri_slices_dicom[s][mri_type] = dicom_handler.load_subject_scan(
+                            os.path.join(database_path, s, mri_type))
+                        raw_slices[s][mri_type] = dicom_handler.extract_raw_img_array(
+                            mri_slices_dicom[s][mri_type])
 
-            mri_slices_tumor_masks[s][mri_type] = dicom_handler.load_subject_scan(
-                os.path.join(masks_path, s, mri_type))
-            raw_slices_masks[s][mri_type] = dicom_handler.extract_raw_img_array(
-                mri_slices_tumor_masks[s][mri_type])
+                        mri_slices_tumor_masks[s][mri_type] = dicom_handler.load_subject_scan(
+                            os.path.join(masks_path, s, mri_type))
+                        raw_slices_masks[s][mri_type] = dicom_handler.extract_raw_img_array(
+                            mri_slices_tumor_masks[s][mri_type])
 
-            mri_slices_tumor_masks_validated[s][mri_type] = seg.validate_masks(raw_slices[s][mri_type], raw_slices_masks[s][mri_type])
-            mri_slices_segmented[s][mri_type] = [seg*val for seg,val in zip(
-                raw_slices_masks[s][mri_type], mri_slices_tumor_masks_validated[s][mri_type])]
+                        mri_slices_tumor_masks_validated[s][mri_type] = seg.validate_masks(raw_slices[s][mri_type], raw_slices_masks[s][mri_type])
+                        mri_slices_segmented[s][mri_type] = [seg*val for seg,val in zip(
+                            raw_slices[s][mri_type], mri_slices_tumor_masks_validated[s][mri_type])]
 
-            subject_folders[s][mri_type] = os.path.join(
-                database_path, s, mri_type)
+                        subject_folders[s][mri_type] = os.path.join(
+                            database_path, s, mri_type)
 
     if not os.path.exists(dataset_segmentation_masks_validated):
         os.mkdir(dataset_segmentation_masks_validated)
@@ -284,12 +302,11 @@ if not os.path.exists(dataset_segmentation_masks_validated):
 ##############################################################
 ################ CREATE AND SAVE CONTOURS ####################
 if not os.path.exists(dataset_segmentation_contours):
+    print("Contour creation started")
     mri_slices_dicom = {}
     raw_slices = {}
     raw_slices_masks = {}
     mri_slices_dicom_masks = {}
-    mri_slices_contour = {}
-    subject_folders = {}
 
     # Obtain subject list
     database_path = os.path.join(os.path.dirname(
@@ -305,39 +322,45 @@ if not os.path.exists(dataset_segmentation_contours):
 
     # Contour drawing
     for s in subjects:
-        mri_slices_dicom[s] = {}
-        raw_slices[s] = {}
-        raw_slices_masks[s] = {}
-        mri_slices_dicom_masks[s] = {}
-        mri_slices_contour[s] = {}
+        print("Reading subject " + s)
+        if not s.lower() == '.ds_store':
+            mri_slices_dicom[s] = {}
+            raw_slices[s] = {}
+            raw_slices_masks[s] = {}
+            mri_slices_dicom_masks[s] = {}
 
-        found_mri_types = os.listdir(os.path.join(database_masks, s))
-        found_mri_types = found_mri_types[::-1]
+            found_mri_types = os.listdir(os.path.join(database_masks, s))
+            found_mri_types = found_mri_types[::-1]
 
-        for mri_type in found_mri_types:
-            mri_slices_dicom[s][mri_type] = dicom_handler.load_subject_scan(
-                os.path.join(database_path, s, mri_type))
-            raw_slices[s][mri_type] = dicom_handler.extract_raw_img_array(
-                mri_slices_dicom[s][mri_type])
+            for mri_type in os.listdir(os.path.join(database_path, s)):
+                if mri_type in img_types:
+                    mri_slices_dicom[s][mri_type] = dicom_handler.load_subject_scan(
+                        os.path.join(database_path, s, mri_type))
+                    raw_slices[s][mri_type] = dicom_handler.extract_raw_img_array(
+                        mri_slices_dicom[s][mri_type])
 
-            mri_slices_dicom_masks[s][mri_type] = dicom_handler.load_subject_scan(
-                os.path.join(database_masks, s, mri_type))
-            raw_slices_masks[s][mri_type] = dicom_handler.extract_raw_img_array(
-                mri_slices_dicom_masks[s][mri_type])
+                    mri_slices_dicom_masks[s][mri_type] = dicom_handler.load_subject_scan(
+                        os.path.join(database_masks, s, mri_type))
+                    raw_slices_masks[s][mri_type] = dicom_handler.extract_raw_img_array(
+                        mri_slices_dicom_masks[s][mri_type])
 
-            mri_slices_contour[s][mri_type] = seg.save_tumor_contours(
-                os.path.join(dataset_segmentation_contours, 'mask_' + s + '_' + mri_type + '.png'),
-                s, raw_slices[s][mri_type], raw_slices_masks[s][mri_type])
+                    seg.save_tumor_contours(
+                        os.path.join(dataset_segmentation_contours, 'mask_' + s + '_' + mri_type + '.png'),
+                        s, raw_slices[s][mri_type], raw_slices_masks[s][mri_type])
 
 ##############################################################
-################ CALCULATE FEATURES ####################
+################ EXTRACT FEATURES ####################
 if not os.path.exists(dataset_features):
+    print("Feature extraction started")
     mri_slices_dicom = {}
     raw_slices = {}
-    raw_slices_masks = {}
     mri_slices_dicom_masks = {}
-    mri_slices_contour = {}
-    subject_folders = {}
+    raw_slices_masks = {}
+    mri_slices_dicom_std = {}
+    raw_slices_std = {}
+
+    features = []
+    features.append(column_names)
 
     # Obtain subject list
     database_path = os.path.join(os.path.dirname(
@@ -345,44 +368,69 @@ if not os.path.exists(dataset_features):
 
     database_masks = os.path.join(os.path.dirname(
         os.path.abspath(__file__)), dataset_segmentation_masks_validated)
+
+    database_std = os.path.join(os.path.dirname(
+        os.path.abspath(__file__)), dataset_stand)
+
     subjects = dicom_handler.get_subject_list(database_masks)
+
+    # Feature extraction
+    for s in subjects:
+        print("Reading subject " + s)
+        if not s.lower() == '.ds_store':
+            mri_slices_dicom[s] = {}
+            raw_slices[s] = {}
+            raw_slices_masks[s] = {}
+            mri_slices_dicom_masks[s] = {}
+            mri_slices_dicom_std[s] = {}
+            raw_slices_std[s] = {}
+
+            found_mri_types = os.listdir(os.path.join(database_masks, s))
+            found_mri_types = found_mri_types[::-1]
+
+            for mri_type in os.listdir(os.path.join(database_path, s)):
+                if mri_type in img_types:
+                    mri_slices_dicom[s][mri_type] = dicom_handler.load_subject_scan(
+                        os.path.join(database_path, s, mri_type))
+                    raw_slices[s][mri_type] = dicom_handler.extract_raw_img_array(
+                        mri_slices_dicom[s][mri_type])
+
+                    mri_slices_dicom_masks[s][mri_type] = dicom_handler.load_subject_scan(
+                        os.path.join(database_masks, s, mri_type))
+                    raw_slices_masks[s][mri_type] = dicom_handler.extract_raw_img_array(
+                        mri_slices_dicom_masks[s][mri_type])
+
+                    mri_slices_dicom_std[s][mri_type] = dicom_handler.load_subject_scan(
+                        os.path.join(database_std, s, mri_type))
+                    raw_slices_std[s][mri_type] = dicom_handler.extract_raw_img_array(
+                        mri_slices_dicom_std[s][mri_type])
+
+                    slice_thicknesses = [slc.SliceThickness for slc in mri_slices_dicom[s][mri_type]]
+
+                    if mri_type == 't1c' or mri_type == 't1':
+                        extracted_features = seg.extract_features(raw_slices[s][mri_type], raw_slices_masks[s][mri_type], 
+                            raw_slices_std[s][mri_type], slice_thicknesses)
+                        extracted_features = extracted_features.tolist()
+                        extracted_features.insert(0, mri_type)
+                        extracted_features.insert(0, s)
+                        features.append(extracted_features)
+
+                    if mri_type == 't2':
+                        extracted_features = fe.extract_features(raw_slices[s][mri_type], raw_slices_masks[s][mri_type],
+                            raw_slices_std[s][mri_type], slice_thicknesses)
+
+                    if mri_type == 'flair':
+                        extracted_features = fe.extract_features(raw_slices[s][mri_type], raw_slices_masks[s][mri_type],
+                            raw_slices_std[s][mri_type], slice_thicknesses)
 
     # Create directory
     if not os.path.exists(dataset_features):
         os.mkdir(dataset_features)
 
-    # Contour drawing
-    for s in subjects:
-        mri_slices_dicom[s] = {}
-        raw_slices[s] = {}
-        raw_slices_masks[s] = {}
-        mri_slices_dicom_masks[s] = {}
-        mri_slices_contour[s] = {}
-
-        found_mri_types = os.listdir(os.path.join(database_masks, s))
-        found_mri_types = found_mri_types[::-1]
-
-        for mri_type in found_mri_types:
-            mri_slices_dicom[s][mri_type] = dicom_handler.load_subject_scan(
-                os.path.join(database_path, s, mri_type))
-            raw_slices[s][mri_type] = dicom_handler.extract_raw_img_array(
-                mri_slices_dicom[s][mri_type])
-
-            mri_slices_dicom_masks[s][mri_type] = dicom_handler.load_subject_scan(
-                os.path.join(database_masks, s, mri_type))
-            raw_slices_masks[s][mri_type] = dicom_handler.extract_raw_img_array(
-                mri_slices_dicom_masks[s][mri_type])
-
-            #if mri_type == 't1c' or mri_type == 't1':
-                #seg.extract_features(raw_slices[s][mri_type], raw_slices_masks[s][mri_type])
-
-            #if mri_type == 't2':
-                #seg.extract_features(raw_slices[s][mri_type], raw_slices_masks[s][mri_type])
-
-            #if mri_type == 'flair':
-                #seg.extract_features(raw_slices[s][mri_type], raw_slices_masks[s][mri_type])
-
-            subject_folders[s][mri_type] = os.path.join(
-                database_path, s, mri_type)
+    # Save extracted features
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), dataset_features, 'features.csv'),
+        'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerows(features)
 
 print('Done')
