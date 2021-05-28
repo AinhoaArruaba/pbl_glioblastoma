@@ -5,7 +5,6 @@ output: html_notebook
 
 ```{r library load}
 library(jsonlite)
-library(mlbench)
 library(corrplot)
 library(Amelia)
 library(caret)
@@ -18,6 +17,7 @@ library(gridExtra)
 library(ggplot2)
 library(ggpmisc)
 library(data.table)
+library(tibble)
 ```
 
 Este script muestra los pasos seguidos para el análisis de los factores de riesgo que pueden llevar al desarrollo de un glioblastoma multiforme (GBM) y no sobrevivir.

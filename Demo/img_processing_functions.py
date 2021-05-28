@@ -344,6 +344,7 @@ def standarization_landmark_extraction(raw_slices, subjects, s1, s2, pc1, pc2, l
     # Landmark extraction
     for s in subjects:
         for mri_type in raw_slices[s]:
+            mri = mri_type.split(' ')[1]
             m1 = np.min(raw_slices[s][mri_type])
             m2 = np.max(raw_slices[s][mri_type])
             [hist, edges] = np.histogram(raw_slices[s][mri_type], bins=m2)
@@ -353,9 +354,9 @@ def standarization_landmark_extraction(raw_slices, subjects, s1, s2, pc1, pc2, l
                                height=700, distance=3)
             x = np.max(edges[peaks[0]])
             x_p = s1 + (((x - p1)/(p2 - p1)) * (s2 - s1))
-            if not mri_type in x_array:
-                x_array[mri_type] = []
-            x_array[mri_type].append(x_p)
+            if not mri in x_array:
+                x_array[mri] = []
+            x_array[mri].append(x_p)
             if display:
                 img_utils.plot_hist_peaks(s, hist, peaks)
 
@@ -387,6 +388,7 @@ def mri_standarization(raw_slices, subjects, landmark_filename, display=False):
     # Apply transformations
     for s in subjects:
         for mri_type in raw_slices[s]:
+            mri = mri_type.split(' ')[1]
             m1 = np.min(raw_slices[s][mri_type])
             m2 = np.max(raw_slices[s][mri_type])
             [hist, edges] = np.histogram(raw_slices[s][mri_type], bins=m2)
@@ -401,11 +403,11 @@ def mri_standarization(raw_slices, subjects, landmark_filename, display=False):
                         voxel_val = raw_slices[s][mri_type][index, row, col]
 
                         if voxel_val >= m1 and voxel_val <= x:
-                            new_voxel_val = x_p_mean[mri_type] + (voxel_val - x) * (
-                                (s1 - x_p_mean[mri_type])/(p1 - x))
+                            new_voxel_val = x_p_mean[mri] + (voxel_val - x) * (
+                                (s1 - x_p_mean[mri])/(p1 - x))
                         else:
-                            new_voxel_val = x_p_mean[mri_type] + (voxel_val - x) * (
-                                (s2 - x_p_mean[mri_type])/(p2 - x))
+                            new_voxel_val = x_p_mean[mri] + (voxel_val - x) * (
+                                (s2 - x_p_mean[mri])/(p2 - x))
 
                         raw_slices[s][mri_type][index,
                                                 row, col] = new_voxel_val
