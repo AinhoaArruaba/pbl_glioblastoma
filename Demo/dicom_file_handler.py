@@ -7,7 +7,7 @@ from pprint import pprint
 
 
 def load_subject_scan(scan_path):
-    slices = [dicom.read_file(scan_path + '/' + s)
+    slices = [dicom.read_file(scan_path + '/' + s, force=True)
               for s in os.listdir(scan_path)]
     slices.sort(key=lambda x: int(x.InstanceNumber))
     try:
@@ -42,6 +42,7 @@ def save_subject_scan(raw_slices, subject, scan_path, scan_type, new_folder):
 
         slices[index[0]].save_as(os.path.join(
             new_folder, subject, scan_type, 'slice_' + str(index[0]) + '.dcm'))
+
 
 def save_subject_scan_seg(raw_slices, subject, scan_path, scan_type, new_folder):
     slices = [dicom.read_file(scan_path + '/' + s)
@@ -98,9 +99,46 @@ def identify_scan_folder(path):
             study_folder = os.path.join(path, subject_studies[dates[0][0]])
 
         study_scans = os.listdir(study_folder)
+        study_scans.sort()
+
+        t1c_added = False
+        flair_added = False
         for index, scan in enumerate(study_scans):
             if not '.ds_store' in scan.lower():
-                scans.append(scan)
+                if 'ax t1c' in scan.lower():
+                    scans.append(scan)
+                    t1c_added = True
+                elif 'ax flair' in scan.lower():
+                    scans.append(scan)
+                    flair_added = True
+                elif (not t1c_added or not flair_added) and 'cor' in scan.lower():
+                    if not t1c_added and 'cor t1c' in scan.lower():
+                        scans.append(scan)
+                        t1c_added = True
+                    elif not flair_added and 'cor flair' in scan.lower():
+                        scans.append(scan)
+                        flair_added = True
+                elif (not t1c_added or not flair_added) and 'sag' in scan.lower():
+                    if not t1c_added and 'sag t1c' in scan.lower():
+                        scans.append(scan)
+                        t1c_added = True
+                    elif not flair_added and 'sag flair' in scan.lower():
+                        scans.append(scan)
+                        flair_added = True
+
+        if not flair_added:
+            for index, scan in enumerate(study_scans):
+                if not '.ds_store' in scan.lower():
+                    if 'ax t2' in scan.lower():
+                        scans.append(scan)
+                        flair_added = True
+                    elif not flair_added and 'cor t2' in scan.lower():
+                        scans.append(scan)
+                        flair_added = True
+                    elif not flair_added and 'sag t2' in scan.lower():
+                        scans.append(scan)
+                        flair_added = True
+
     return study_folder, scans
 
 
@@ -110,6 +148,7 @@ def get_subject_list(path):
     for f in folders:
         if os.path.isdir(os.path.join(path, f)):
             subjects.append(f)
+    subjects.sort()
     return subjects
 
 

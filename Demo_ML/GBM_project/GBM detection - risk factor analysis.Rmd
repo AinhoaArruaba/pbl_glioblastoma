@@ -5,7 +5,6 @@ output: html_notebook
 
 ```{r library load}
 library(jsonlite)
-library(mlbench)
 library(corrplot)
 library(Amelia)
 library(caret)
@@ -18,6 +17,7 @@ library(gridExtra)
 library(ggplot2)
 library(ggpmisc)
 library(data.table)
+library(tibble)
 ```
 
 Este script muestra los pasos seguidos para el análisis de los factores de riesgo que pueden llevar al desarrollo de un glioblastoma multiforme (GBM) y no sobrevivir.
@@ -419,7 +419,7 @@ r_fit.all_vars <- ranger(Surv(time = time_monitored, event = vital_status) ~  ag
                          splitrule = "extratrees",
                          num.random.splits = 20,
                          scale.permutation.importance = TRUE,
-                         verbose = TRUE)
+                         verbose = TRUE, seed = 10)
 
 surv_prob <- data.frame(r_fit.all_vars$survival)
 avg_prob_allvars <- sapply(surv_prob, mean)
@@ -434,8 +434,8 @@ var_imp <- data.frame(sort(round(r_fit.all_vars$variable.importance, 4), decreas
 names(var_imp) <- "importance"
 var_imp
 
-# Calcular el p-value para ver si las variables son representativas o no para el modelo
-importance_pvalues(r_fit.all_vars, method = "altmann", data = dataset_survival, formula = Surv(time = time_monitored, event = vital_status) ~  age + gender + bmi + alcohol_consumption + years_high_alcohol_quantity_consumed + tobacco_smoking_history + number_of_pack_years_smoked + tumor_site + tumor_size_in_cm)
+# # Calcular el p-value para ver si las variables son representativas o no para el modelo
+# importance_pvalues(r_fit.all_vars, method = "altmann", data = dataset_survival, formula = Surv(time = time_monitored, event = vital_status) ~  age + gender + bmi + alcohol_consumption + years_high_alcohol_quantity_consumed + tobacco_smoking_history + number_of_pack_years_smoked + tumor_site + tumor_size_in_cm)
 ```
 
 Con las variables de más importancia, es decir, aquellas que introducen un mayor error en la predicción en caso de eliminarse y que tienen un valor p < 0.05, se crea un nuevo modelo de supervivencia.
@@ -450,7 +450,7 @@ r_fit.selec_vars <- ranger(Surv(time = time_monitored, event = vital_status) ~  
                            splitrule = "extratrees",
                            num.random.splits = 20,
                            scale.permutation.importance = TRUE,
-                           verbose = TRUE)
+                           verbose = TRUE, seed = 10)
 
 surv_prob <- data.frame(r_fit.selec_vars$survival)
 avg_prob_selecvars <- sapply(surv_prob, mean)
@@ -464,9 +464,6 @@ ggplot(df, aes(x = Time, y = Survival, color = Model)) + geom_line() + ylim(0, 1
 var_imp <- data.frame(sort(round(r_fit.selec_vars$variable.importance, 4), decreasing = TRUE))
 names(var_imp) <- "importance"
 var_imp
-
-# Calcular el p-value para ver si las variables son representativas o no para el modelo
-importance_pvalues(r_fit.selec_vars, method = "altmann", data = dataset_survival, formula = Surv(time = time_monitored, event = vital_status) ~  age + gender + tobacco_smoking_history + alcohol_consumption + tumor_size_in_cm)
 ```
 En el nuevo modelo se observa que la variable del historial de consumo de tabaco del paciente ha dejado de ser relevante, por lo que se puede concluir que las variables más determinantes a la hora de predecir la supervivencia del paciente son el consumo de alcohol y la edad.
 
