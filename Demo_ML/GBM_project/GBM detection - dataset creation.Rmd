@@ -287,6 +287,8 @@ for(i in 1:length(case_id_with_images)){
 dataset_images <- dataset[case_id_with_images_index,1:dim(dataset)[2]]
 
 dataset_images_12month <- dataset_images
+dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'days_from_initial_pathologic_diagnosis_to_death_at_12months_follow_up', arr.ind = TRUE)]
+dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'days_from_initial_diagnosis_to_last_contact_at_12months_follow_up', arr.ind = TRUE)]
 dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'days_from_initial_pathologic_diagnosis_to_death_at_24months_follow_up', arr.ind = TRUE)]
 dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'days_from_initial_pathologic_diagnosis_to_death_at_36months_follow_up', arr.ind = TRUE)]
 dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'days_from_initial_pathologic_diagnosis_to_death_at_48months_follow_up', arr.ind = TRUE)]
@@ -296,10 +298,12 @@ dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_1
 dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'vital_status_at_24months_follow_up', arr.ind = TRUE)]
 dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'vital_status_at_36months_follow_up', arr.ind = TRUE)]
 dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'vital_status_at_48months_follow_up', arr.ind = TRUE)]
+dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'tumor_status_at_12months_follow_up', arr.ind = TRUE)]
 dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'tumor_status_at_24months_follow_up', arr.ind = TRUE)]
 dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'tumor_status_at_36months_follow_up', arr.ind = TRUE)]
 dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'tumor_status_at_48months_follow_up', arr.ind = TRUE)]
 
+dataset_images_12month <- dataset_images_12month[, -which(names(dataset_images_12month) == 'tumor_site', arr.ind = TRUE)]
 
 dataset_images_12month <- dataset_images_12month[-which(dataset_images_12month$cause_of_death_at_12months_follow_up == 'Other', arr.ind = TRUE),]
 dataset_images_12month <- dataset_images_12month[-which(dataset_images_12month$cause_of_death_at_12months_follow_up == 'Pneumonia', arr.ind = TRUE),]

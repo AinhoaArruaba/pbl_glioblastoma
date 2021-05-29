@@ -410,7 +410,7 @@ El test ANOVA muestra un valor p > 0.05 por lo que podemos concluir que la difer
 Para comparar el modelo de supervivencia obtenido mediante la regresión de Cox con otro modelo se implementa otro modelo basádo en el algoritmo Random Forest.  Se calcula el modelo de supervivencia de todas las variables y obtenemos las importancias asignadas a cada una de las variables por el modelo mediante el método de permutación. Esta métrica nos permite determinan como aumenta el error en la predicción al eliminar la variable.
 
 ```{r}
-# p value atea
+# calcular el p-value
 names(dataset_survival) <- janitor::make_clean_names(names(dataset_survival), use_make_names = TRUE)
 
 r_fit.all_vars <- ranger(Surv(time = time_monitored, event = vital_status) ~  age + gender + bmi + alcohol_consumption + years_high_alcohol_quantity_consumed + tobacco_smoking_history + number_of_pack_years_smoked + tumor_site + tumor_size_in_cm + height_in_cm + weight_in_kg, data = dataset_survival,
