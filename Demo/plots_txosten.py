@@ -66,7 +66,7 @@ for mri_type in img_types:
     p2 = np.percentile(raw_slices[mri_type], 0.98)
     peaks = find_peaks(hist, prominence=1, width=3,
                        height=700, distance=3)
-    img_utils.plot_hist_peaks(s, hist, peaks)
+    img_utils.plot_hist_peaks(s, hist, peaks[0])
 
 eval_database_path = os.path.join(os.path.dirname(
     os.path.abspath(__file__)), "database_eval", "IBSR_04")

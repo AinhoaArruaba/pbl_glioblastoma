@@ -11,23 +11,28 @@ from scipy.signal import find_peaks
 import math
 import feature_extraction as fe
 
+
 def get_tumor_segmentation(mri_slices_preprocessed, display):
     mri_slices_segmented = []
     mri_slices_masks = []
     mri_slices_masks_validated = []
 
     for index in enumerate(mri_slices_preprocessed):
-        segmented_region, segmented_mask = segment_tumors(mri_slices_preprocessed[index[0], :, :], display)
+        segmented_region, segmented_mask = segment_tumors(
+            mri_slices_preprocessed[index[0], :, :], display)
         mri_slices_segmented.append(segmented_region)
         mri_slices_masks.append(segmented_mask)
 
-    mri_slices_masks_validated = validate_masks(mri_slices_preprocessed, mri_slices_masks)
-    mri_slices_segmented = [seg*val for seg,val in zip(mri_slices_segmented,mri_slices_masks_validated)]
+    mri_slices_masks_validated = validate_masks(
+        mri_slices_preprocessed, mri_slices_masks)
+    mri_slices_segmented = [
+        seg*val for seg, val in zip(mri_slices_segmented, mri_slices_masks_validated)]
 
     if display:
         img_utils.plot_stack('Detected tumors', np.array(mri_slices_segmented))
 
     return mri_slices_segmented, mri_slices_masks, mri_slices_masks_validated
+
 
 def validate_masks(mri_slices_preprocessed, mri_slices_masks):
     mri_masks_continuity = np.zeros(len(mri_slices_masks))
@@ -41,7 +46,7 @@ def validate_masks(mri_slices_preprocessed, mri_slices_masks):
         slice_area = fe.compute_slice_area(mri_slices_masks[index[0]])
 
         regions.sort(key=lambda region: region.area, reverse=True)
-        
+
         input_mask = mri_slices_preprocessed[index[0]] > 0
         input_labels = measure.label(input_mask)
         input_regions = measure.regionprops(input_labels)
@@ -49,37 +54,43 @@ def validate_masks(mri_slices_preprocessed, mri_slices_masks):
 
         slice_area = sum(reg.area for reg in regions)
 
-        mri_slices_masks[index[0]], slice_area = __check_mask_validity(regions, totalArea, all_labels, mri_slices_masks[index[0]], slice_area)
+        mri_slices_masks[index[0]], slice_area = __check_mask_validity(
+            regions, totalArea, all_labels, mri_slices_masks[index[0]], slice_area)
 
         if slice_area > slice_area_max:
             slice_area_max = slice_area
             max_slice_area_idx = index[0]
         mri_masks_area[index[0]] = slice_area
-        mri_slices_masks[index[0]] = mri_slices_masks[index[0]].astype(np.int16)
+        mri_slices_masks[index[0]
+                         ] = mri_slices_masks[index[0]].astype(np.int16)
 
-    # Compute continuity of the tumor among slices    
+    # Compute continuity of the tumor among slices
     cont = 0
     for mri_slice_mask_cur, mri_slice_mask_next in zip(mri_slices_masks, mri_slices_masks[1:]):
-        mri_masks_continuity[cont] = sum(sum(mri_slice_mask_cur*mri_slice_mask_next))
+        mri_masks_continuity[cont] = sum(
+            sum(mri_slice_mask_cur*mri_slice_mask_next))
         cont = cont + 1
-    
+
     # Select slices that contain the tumor
-    mri_slices_masks = __select_tumor_slices(mri_masks_continuity, 
-        mri_slices_masks, max_slice_area_idx, mri_masks_area)
+    mri_slices_masks = __select_tumor_slices(mri_masks_continuity,
+                                             mri_slices_masks, max_slice_area_idx, mri_masks_area)
 
     return mri_slices_masks
 
+
 def __check_mask_validity(regions, totalArea, all_labels, mri_slice_mask, slice_area):
     for reg_idx in enumerate(regions):
-            compactness = 1 - 4*math.pi*regions[reg_idx[0]].area/(regions[reg_idx[0]].perimeter**2)
-            if compactness > 0.65 or regions[reg_idx[0]].eccentricity > 0.90 or regions[reg_idx[0]].area > totalArea*0.4:
-                mask = mri_slice_mask
-                mask = mask - \
-                    np.where(all_labels == regions[reg_idx[0]].label, 1, 0)
-                mri_slice_mask = mask
-                slice_area = slice_area - regions[reg_idx[0]].area
+        compactness = 1 - 4*math.pi * \
+            regions[reg_idx[0]].area/(regions[reg_idx[0]].perimeter**2)
+        if compactness > 0.65 or regions[reg_idx[0]].eccentricity > 0.90 or regions[reg_idx[0]].area > totalArea*0.4:
+            mask = mri_slice_mask
+            mask = mask - \
+                np.where(all_labels == regions[reg_idx[0]].label, 1, 0)
+            mri_slice_mask = mask
+            slice_area = slice_area - regions[reg_idx[0]].area
 
     return mri_slice_mask, slice_area
+
 
 def __select_tumor_slices(mri_masks_continuity, mri_slices_masks, max_slice_area_idx, mri_masks_area):
     if np.count_nonzero(mri_masks_continuity) == 0:
@@ -87,16 +98,17 @@ def __select_tumor_slices(mri_masks_continuity, mri_slices_masks, max_slice_area
             if index[0] != max_slice_area_idx:
                 mri_slices_masks[index[0]][:] = 0
     else:
-        first_idx, max_num_connected = __get_first_slice_idx(mri_masks_continuity, mri_masks_area)
+        first_idx, max_num_connected = __get_first_slice_idx(
+            mri_masks_continuity, mri_masks_area)
         first_idx, max_num_connected = __check_previous_next_slides(mri_slices_masks, mri_masks_continuity,
-            first_idx, max_num_connected)        
+                                                                    first_idx, max_num_connected)
 
         for index in enumerate(mri_slices_masks):
             if index[0] < first_idx or index[0] > (first_idx+max_num_connected):
                 mri_slices_masks[index[0]][:] = 0
 
-
     return mri_slices_masks
+
 
 def __get_first_slice_idx(mri_masks_continuity, mri_masks_area):
     first_idx = 0
@@ -105,10 +117,12 @@ def __get_first_slice_idx(mri_masks_continuity, mri_masks_area):
     nz_idxs = np.nonzero(mri_masks_continuity)
     for index in nz_idxs[0]:
         num_connected = 1
-        connected_area = mri_masks_area[index] + mri_masks_area[index+num_connected]
+        connected_area = mri_masks_area[index] + \
+            mri_masks_area[index+num_connected]
         while mri_masks_continuity[index+num_connected]:
             num_connected = num_connected + 1
-            connected_area = connected_area + mri_masks_area[index+num_connected]
+            connected_area = connected_area + \
+                mri_masks_area[index+num_connected]
         if num_connected > max_num_connected:
             max_num_connected = num_connected
             first_idx = index
@@ -119,6 +133,7 @@ def __get_first_slice_idx(mri_masks_continuity, mri_masks_area):
             max_connected_area = connected_area
 
     return first_idx, max_num_connected
+
 
 def __check_previous_next_slides(mri_slices_masks, mri_masks_continuity, first_idx, max_num_connected):
     previous_idx = first_idx - 2
@@ -138,6 +153,7 @@ def __check_previous_next_slides(mri_slices_masks, mri_masks_continuity, first_i
 
     return first_idx, max_num_connected
 
+
 def segment_tumors(mri_slice_preprocessed, display):
     mri_slice = mri_slice_preprocessed
 
@@ -153,7 +169,7 @@ def segment_tumors(mri_slice_preprocessed, display):
     slice_subs = __morph_reconstruction(currentSlice_region, maxMu)
 
     # Binary adaptive thresholding
-    binary_slice = __binary_thresholding(slice_subs)        
+    binary_slice = __binary_thresholding(slice_subs)
 
     # Region with maximum mean intensity is marked as tumour
     tumor_mask = __create_tumor_mask(binary_slice, slice_subs)
@@ -163,12 +179,13 @@ def segment_tumors(mri_slice_preprocessed, display):
 
     segmented_tumor = tumor_mask_final*mri_slice
 
-    #if display:
-     #   img_utils.display_seg_results(currentSlice, slice_subs, 
-      #                              binary_slice, tumor_mask, 
-       #                             tumor_mask_final, segmented_tumor)
+    # if display:
+    #   img_utils.display_seg_results(currentSlice, slice_subs,
+    #                              binary_slice, tumor_mask,
+    #                             tumor_mask_final, segmented_tumor)
 
     return segmented_tumor, tumor_mask_final
+
 
 def __keepLargestRegion(currentSlice):
     binary_slice = currentSlice > 0
@@ -187,6 +204,7 @@ def __keepLargestRegion(currentSlice):
 
     return currentSlice
 
+
 def __mixture_of_gaussians(currentSlice):
     noOfGaussians = 3
 
@@ -194,22 +212,26 @@ def __mixture_of_gaussians(currentSlice):
     sliceTransposed = np.array([currentSliceVector])
     sliceTransposed = sliceTransposed.T
 
-    gm = GaussianMixture(n_components=noOfGaussians, random_state=0, n_init=3).fit(sliceTransposed)
+    gm = GaussianMixture(n_components=noOfGaussians,
+                         random_state=0, n_init=3).fit(sliceTransposed)
     gm_means = np.array(gm.means_).flatten()
     gm_covariances = np.array(gm.covariances_).flatten()
-    
+
     maxV = np.max(gm_covariances)
     maxInd = np.where(gm_covariances == maxV)
     maxMu = max(gm_means[maxInd])
 
     return maxMu
 
+
 def __morph_reconstruction(currentSlice, maxMu):
     seedImage = currentSlice - maxMu
-    slice_rec = morphology.reconstruction(seedImage, currentSlice, method='dilation')
-    slice_subs = currentSlice - slice_rec # get local maximas
+    slice_rec = morphology.reconstruction(
+        seedImage, currentSlice, method='dilation')
+    slice_subs = currentSlice - slice_rec  # get local maximas
 
     return slice_subs
+
 
 def __binary_thresholding(slice_subs):
     thres = filters.threshold_yen(slice_subs)
@@ -217,16 +239,18 @@ def __binary_thresholding(slice_subs):
 
     return binary_slice
 
+
 def __create_tumor_mask(binary_slice, slice_subs):
     binary_slice_morph = __morph_op_initial_mask(binary_slice)
 
     labels = measure.label(binary_slice_morph)
     regions = measure.regionprops(labels)
-    
+
     if len(regions) != 0:
         regions_idx = __find_tumor_region(slice_subs, labels, regions)
 
-    tumor_mask = np.ndarray([binary_slice.shape[0], binary_slice.shape[1]], dtype=np.int16)
+    tumor_mask = np.ndarray(
+        [binary_slice.shape[0], binary_slice.shape[1]], dtype=np.int16)
     tumor_mask[:] = 0
     if regions_idx.size > 0:
         # +1 because the labels start from 1 and the indexes from 0
@@ -238,10 +262,14 @@ def __create_tumor_mask(binary_slice, slice_subs):
 
     return tumor_mask
 
+
 def __find_tumor_region(slice_subs, labels, regions):
-    regions_meanInt, regions_meanInt_possible = __compute_mean_intensities(slice_subs, labels, regions)
-    region_idx = __select_regions(regions, regions_meanInt, regions_meanInt_possible)
+    regions_meanInt, regions_meanInt_possible = __compute_mean_intensities(
+        slice_subs, labels, regions)
+    region_idx = __select_regions(
+        regions, regions_meanInt, regions_meanInt_possible)
     return region_idx
+
 
 def __compute_mean_intensities(slice_subs, labels, regions):
     regions_meanInt = np.zeros(len(regions))
@@ -251,10 +279,11 @@ def __compute_mean_intensities(slice_subs, labels, regions):
         pixels = slice_subs[locs]
         region_mean = np.mean(pixels)
         regions_meanInt_possible[region_idx] = region_mean
-        if regions[region_idx].area > 150: # set minimum area
+        if regions[region_idx].area > 150:  # set minimum area
             regions_meanInt[region_idx] = region_mean
-    
+
     return regions_meanInt, regions_meanInt_possible
+
 
 def __select_regions(regions, regions_meanInt, regions_meanInt_possible):
     maxInt = np.max(regions_meanInt)
@@ -270,12 +299,14 @@ def __select_regions(regions, regions_meanInt, regions_meanInt_possible):
 
     for possibleIdx in range(len(possibleRegions)):
         possible_centroid = regions[possibleRegions[possibleIdx]].centroid
-        euc_dist = np.sqrt((max_centroid[0] - possible_centroid[0])**2 + 
-                            (max_centroid[1] - possible_centroid[1])**2)
+        euc_dist = np.sqrt((max_centroid[0] - possible_centroid[0])**2 +
+                           (max_centroid[1] - possible_centroid[1])**2)
         if euc_dist < 100:
-            selected_regions = np.append(selected_regions, possibleRegions[possibleIdx])
+            selected_regions = np.append(
+                selected_regions, possibleRegions[possibleIdx])
 
     return selected_regions
+
 
 def __morph_op(tumor_mask):
     tumor_mask = morphology.dilation(tumor_mask, morphology.square(5))
@@ -288,6 +319,7 @@ def __morph_op(tumor_mask):
 
     return tumor_mask
 
+
 def __morph_op_initial_mask(tumor_mask):
     tumor_mask = morphology.dilation(tumor_mask, morphology.square(3))
     tumor_mask = morphology.closing(tumor_mask, morphology.square(3))
@@ -298,6 +330,7 @@ def __morph_op_initial_mask(tumor_mask):
 
     return tumor_mask
 
+
 def get_edema_segmentation(mri_slices_preprocessed, m_t_A_t2, display):
     mri_slices_segmented = []
     mri_slices_masks = []
@@ -305,13 +338,14 @@ def get_edema_segmentation(mri_slices_preprocessed, m_t_A_t2, display):
     if len(mri_slices_preprocessed) != len(m_t_A_t2):
         m_t_A_t2 = []
         for index in enumerate(mri_slices_preprocessed):
-            segmented_region, segmented_mask = segment_edema_flair(mri_slices_preprocessed[index[0], :, :], m_t_A_t2, display)
+            segmented_region, segmented_mask = segment_edema_flair(
+                mri_slices_preprocessed[index[0], :, :], m_t_A_t2, display)
             mri_slices_segmented.append(segmented_region)
             mri_slices_masks.append(segmented_mask)
     else:
         for index in enumerate(mri_slices_preprocessed):
-            segmented_region, segmented_mask = segment_edema_flair(mri_slices_preprocessed[index[0], :, :], 
-                m_t_A_t2[index[0], :, :], display)
+            segmented_region, segmented_mask = segment_edema_flair(mri_slices_preprocessed[index[0], :, :],
+                                                                   m_t_A_t2[index[0], :, :], display)
             mri_slices_segmented.append(segmented_region)
             mri_slices_masks.append(segmented_mask)
 
@@ -319,6 +353,7 @@ def get_edema_segmentation(mri_slices_preprocessed, m_t_A_t2, display):
         img_utils.plot_stack('Detected edemas', np.array(mri_slices_segmented))
 
     return mri_slices_segmented, mri_slices_masks
+
 
 def segment_edema_flair(mri_slice_preprocessed, m_t_A_t2, display):
     mri_slice = mri_slice_preprocessed
@@ -329,7 +364,8 @@ def segment_edema_flair(mri_slice_preprocessed, m_t_A_t2, display):
     currentSlice_region = __keepLargestRegion(currentSlice)
 
     # Compute thresholds
-    threshold_A, threshold_B, threshold_fgr = __compute_threshold_flair(currentSlice_region, display)
+    threshold_A, threshold_B, threshold_fgr = __compute_threshold_flair(
+        currentSlice_region, display)
 
     # Obtain masks
     m_t_A_flair = currentSlice_region > threshold_A
@@ -337,8 +373,9 @@ def segment_edema_flair(mri_slice_preprocessed, m_t_A_t2, display):
     m_t_fgr_flair = currentSlice_region > threshold_fgr
 
     # Segmentation
-    edema_mask = morphology.reconstruction(m_t_B_flair, m_t_A_flair, method='dilation', selem=None, offset=None)
-    
+    edema_mask = morphology.reconstruction(
+        m_t_B_flair, m_t_A_flair, method='dilation', selem=None, offset=None)
+
     if len(m_t_A_t2) > 0:
         m_cleaned = m_t_A_t2*m_t_fgr_flair
         if np.max(m_cleaned) > 0:
@@ -349,18 +386,20 @@ def segment_edema_flair(mri_slice_preprocessed, m_t_A_t2, display):
             mask = m_cleaned
             while marker.all() != marker_result.all():
                 marker = marker_result
-                marker_dilated = morphology.dilation(marker, morphology.square(3))
+                marker_dilated = morphology.dilation(
+                    marker, morphology.square(3))
                 marker_result = marker_dilated*mask
             edema_mask = marker_result
 
     segmented_edema = edema_mask*mri_slice
 
-    #if display:
-     #   img_utils.display_seg_results(currentSlice, m_t_A_flair, 
-      #                              m_t_B_flair, m_t_fgr_flair, 
-       #                             edema_mask, segmented_edema)
+    # if display:
+    #   img_utils.display_seg_results(currentSlice, m_t_A_flair,
+    #                              m_t_B_flair, m_t_fgr_flair,
+    #                             edema_mask, segmented_edema)
 
     return segmented_edema, edema_mask
+
 
 def __compute_threshold_flair(currentSlice_region, display):
     m2 = np.max(currentSlice_region)
@@ -382,12 +421,16 @@ def __compute_threshold_flair(currentSlice_region, display):
         mode1_idx, mode2_idx = __get_modes(hist_filtered, peaks)
 
         # Compute thresholds
-        threshold_A, threshold_B, threshold_fgr = __compute_thresholds(mode1_idx, mode2_idx, hist_filtered, edges)
-        histPeaks = np.array([mode1_idx, mode2_idx, threshold_A, threshold_B, threshold_fgr])
-
-        img_utils.plot_hist_peaks('Prueba', hist_filtered, histPeaks)
+        threshold_A, threshold_B, threshold_fgr = __compute_thresholds(
+            mode1_idx, mode2_idx, hist_filtered, edges)
+        histPeaks = np.array(
+            [mode1_idx, mode2_idx, threshold_A, threshold_B, threshold_fgr])
+        if display:
+            img_utils.plot_hist_peaks(
+                'Prueba', hist_filtered, histPeaks.astype(np.int64))
 
     return threshold_A, threshold_B, threshold_fgr
+
 
 def __get_modes(hist_filtered, peaks):
     mode1 = 0
@@ -413,14 +456,16 @@ def __get_modes(hist_filtered, peaks):
 
     return mode1_idx, mode2_idx
 
-def  __compute_thresholds(mode1_idx, mode2_idx, hist_filtered, edges):
+
+def __compute_thresholds(mode1_idx, mode2_idx, hist_filtered, edges):
     max_slope = 0
     max_slope_idx = mode2_idx
     cur_slope = 0
     prev_slope = 1
     cur_slope_idx = mode2_idx
     while prev_slope > 0 and cur_slope_idx < len(hist_filtered)-1:
-        cur_slope = hist_filtered[cur_slope_idx] - hist_filtered[cur_slope_idx+1]
+        cur_slope = hist_filtered[cur_slope_idx] - \
+            hist_filtered[cur_slope_idx+1]
         if cur_slope > max_slope:
             max_slope = cur_slope
             max_slope_idx = cur_slope_idx
@@ -428,10 +473,9 @@ def  __compute_thresholds(mode1_idx, mode2_idx, hist_filtered, edges):
         prev_slope = cur_slope
         # Check slope continuity
         if prev_slope <= 0:
-            slope_range = hist_filtered[cur_slope_idx-1 : cur_slope_idx+4]
+            slope_range = hist_filtered[cur_slope_idx-1: cur_slope_idx+4]
             if min(slope_range) != hist_filtered[cur_slope_idx-1]:
                 prev_slope = 1
-
 
     # Threshold A
     threshold_A = edges[max_slope_idx]
@@ -442,14 +486,15 @@ def  __compute_thresholds(mode1_idx, mode2_idx, hist_filtered, edges):
     prev_slope = 1
     cur_slope_idx = mode2_idx
     while prev_slope > 0 and cur_slope_idx > 0:
-        cur_slope = hist_filtered[cur_slope_idx] - hist_filtered[cur_slope_idx-1]
+        cur_slope = hist_filtered[cur_slope_idx] - \
+            hist_filtered[cur_slope_idx-1]
         cur_slope_idx = cur_slope_idx - 1
         prev_slope = cur_slope
         if cur_slope_idx == 52:
             aa = 1
         # Check slope continuity
         if prev_slope <= 0:
-            slope_range = hist_filtered[cur_slope_idx-3 : cur_slope_idx+2]
+            slope_range = hist_filtered[cur_slope_idx-3: cur_slope_idx+2]
             if min(slope_range) != hist_filtered[cur_slope_idx+1]:
                 prev_slope = 1
 
@@ -458,18 +503,22 @@ def  __compute_thresholds(mode1_idx, mode2_idx, hist_filtered, edges):
 
     return threshold_A, threshold_B, threshold_fgr
 
+
 def get_t2_mask(mri_slices_preprocessed, display):
     ref_slice = mri_slices_preprocessed[0]
-    pixel_dims = (len(mri_slices_preprocessed),  int(ref_slice.shape[0]), int(ref_slice.shape[1]))
+    pixel_dims = (len(mri_slices_preprocessed),  int(
+        ref_slice.shape[0]), int(ref_slice.shape[1]))
     t2_masks = np.zeros(pixel_dims, dtype=ref_slice.dtype)
 
     for index in enumerate(mri_slices_preprocessed):
-        t2_masks[index[0], :, :] = __get_thres_A_mask(mri_slices_preprocessed[index[0], :, :], display)
+        t2_masks[index[0], :, :] = __get_thres_A_mask(
+            mri_slices_preprocessed[index[0], :, :], display)
 
     if display:
         img_utils.plot_stack('T2 masks', np.array(t2_masks))
 
     return t2_masks
+
 
 def __get_thres_A_mask(mri_slice_preprocessed, display):
     mri_slice = mri_slice_preprocessed
@@ -479,13 +528,16 @@ def __get_thres_A_mask(mri_slice_preprocessed, display):
     # Keep largest connected region
     currentSlice_region = __keepLargestRegion(currentSlice)
 
-    ## Compute thresholds
-    threshold_A, threshold_B, threshold_fgr = __compute_threshold_flair(currentSlice_region, display)
+    # Compute thresholds
+    threshold_A, threshold_B, threshold_fgr = __compute_threshold_flair(
+        currentSlice_region, display)
 
-    ## Obtain mask
+    # Obtain mask
     m_t_A = currentSlice_region > threshold_A
 
     return m_t_A
 
+
 def save_tumor_contours(fig_name, s, mri_slices_preprocessed, mri_slices_masks):
-    img_utils.save_stack_contours(fig_name, s, mri_slices_preprocessed, mri_slices_masks)
+    img_utils.save_stack_contours(
+        fig_name, s, mri_slices_preprocessed, mri_slices_masks)

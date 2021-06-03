@@ -20,7 +20,7 @@ img_utils.plot_stack('No skull T1w', no_skull_img_t1)
 # mask_t2, no_skull_img_t2 = img_func.image_preprocessing_brainweb(
 #     raw_img_t2, False)
 # img_utils.plot_stack('No skull T2w', no_skull_img_t2)
-#mask_pd, no_skull_img_pd = img_func.image_preprocessing_brainweb(
+# mask_pd, no_skull_img_pd = img_func.image_preprocessing_brainweb(
 #    raw_img_pd, False)
 #img_utils.plot_stack('No skull PD', no_skull_img_pd)
 # img_func.image_preprocessing_brainweb(raw_img_pd, True)

@@ -9,24 +9,29 @@ from scipy.stats import entropy
 from skimage.feature.texture import greycomatrix, greycoprops
 import math
 
-def extract_features(mri_slices_segmented, mri_slices_masks, mri_slices_std, slice_thicknesses):
+
+def extract_features(mri_slices_segmented, mri_slices_masks, mri_slices_std, slice_thicknesses, pixel_spacing):
     # Find first and last index of valid masks
     first_idx, last_idx = __get_first_last_idx(mri_slices_masks)
 
     # Get tumor volume
     tumor_volume = 0
-    tumor_volume, tumor_volume_slices = __get_tumor_volume(mri_slices_masks, slice_thicknesses, first_idx, last_idx)
+    tumor_volume, tumor_volume_slices = __get_tumor_volume(
+        mri_slices_masks, slice_thicknesses, pixel_spacing, first_idx, last_idx)
 
     # Extract features from the mask with the highest tumor volume
     maxV = np.max(tumor_volume_slices)
     max_idx = np.where(tumor_volume_slices == maxV)[0][0] + first_idx
-    dists = __extract_tumor_location(mri_slices_masks[max_idx], mri_slices_std[max_idx])
-    slice_features = __extract_slice_features(mri_slices_segmented[max_idx], mri_slices_masks[max_idx])
+    dists = __extract_tumor_location(
+        mri_slices_masks[max_idx], mri_slices_std[max_idx])
+    slice_features = __extract_slice_features(
+        mri_slices_segmented[max_idx], mri_slices_masks[max_idx])
 
     volume_dist_features = np.append(tumor_volume, dists)
     extracted_features = np.append(volume_dist_features, slice_features)
 
     return extracted_features
+
 
 def __get_first_last_idx(mri_slices_masks):
     first_idx = -1
@@ -48,31 +53,37 @@ def __get_first_last_idx(mri_slices_masks):
 
     return first_idx, last_idx
 
-def __get_tumor_volume(mri_slices_masks, slice_thicknesses, first_idx, last_idx):
+
+def __get_tumor_volume(mri_slices_masks, slice_thicknesses, pixel_spacing, first_idx, last_idx):
     tumor_volume_slices = np.zeros(last_idx-first_idx+1)
     for index in range(first_idx, last_idx+1):
-        tumor_volume_slices[index-first_idx] = __compute_mask_volume(mri_slices_masks[index], slice_thicknesses[index])
+        tumor_volume_slices[index-first_idx] = __compute_mask_volume(
+            mri_slices_masks[index], slice_thicknesses[index], pixel_spacing[index])
         if tumor_volume_slices[index-first_idx] == 0 and first_idx != 0:
-            tumor_volume_slices[index-first_idx] = __estimate_mask_volume(mri_slices_masks[index-1], 
-                mri_slices_masks[index+1], slice_thicknesses[index])
-    
+            tumor_volume_slices[index-first_idx] = __estimate_mask_volume(mri_slices_masks[index-1],
+                                                                          mri_slices_masks[index+1], slice_thicknesses[index], pixel_spacing[index])
+
     tumor_volume = sum(tumor_volume_slices)
 
     return tumor_volume, tumor_volume_slices
 
-def __compute_mask_volume(mri_slice_mask, slice_thickness):
+
+def __compute_mask_volume(mri_slice_mask, slice_thickness, pixel_spacing):
     slice_area = compute_slice_area(mri_slice_mask)
-    slice_volume = slice_area*slice_thickness
+    slice_volume = slice_area*slice_thickness*pixel_spacing[0]*pixel_spacing[1]
 
     return slice_volume
 
-def __estimate_mask_volume(mri_previous_slice_mask, mri_next_slice_mask, slice_thickness):
+
+def __estimate_mask_volume(mri_previous_slice_mask, mri_next_slice_mask, slice_thickness, pixel_spacing):
     previous_slice_area = compute_slice_area(mri_previous_slice_mask)
     next_slice_area = compute_slice_area(mri_next_slice_mask)
     estimated_area = (previous_slice_area+next_slice_area)/2
-    estimated_volume = estimated_area*slice_thickness
+    estimated_volume = estimated_area*slice_thickness * \
+        pixel_spacing[0]*pixel_spacing[1]
 
     return estimated_volume
+
 
 def compute_slice_area(mri_slice_mask):
     slice_area = 0
@@ -82,6 +93,7 @@ def compute_slice_area(mri_slice_mask):
         slice_area = sum(reg.area for reg in regions)
 
     return slice_area
+
 
 def __extract_tumor_location(mri_slice_mask, mri_slice_std):
     labels = measure.label(mri_slice_mask)
@@ -103,6 +115,7 @@ def __extract_tumor_location(mri_slice_mask, mri_slice_std):
     dists = [dist_x, dist_y]
 
     return dists
+
 
 def __extract_slice_features(mri_slice_segmented, mri_slice_mask):
     extracted_features = []
@@ -151,7 +164,8 @@ def __extract_slice_features(mri_slice_segmented, mri_slice_mask):
     M_hu = __compute_Hu_moments(mri_slice_segmented)
     extracted_features = np.append(extracted_features, M_hu)
 
-    return extracted_features 
+    return extracted_features
+
 
 def __compute_compactness(mri_slice_mask):
     all_labels = measure.label(mri_slice_mask)
@@ -160,10 +174,12 @@ def __compute_compactness(mri_slice_mask):
     if len(regions) > 0:
         compactness = 0
         for reg_idx in enumerate(regions):
-            compactness = compactness + 1 - 4*math.pi*regions[reg_idx[0]].area/(regions[reg_idx[0]].perimeter**2)
+            compactness = compactness + 1 - 4*math.pi * \
+                regions[reg_idx[0]].area/(regions[reg_idx[0]].perimeter**2)
         compactness = compactness / len(regions)
 
     return compactness
+
 
 def __compute_mean_grey_level(mri_slice_segmented):
     uf = 0
@@ -177,16 +193,18 @@ def __compute_mean_grey_level(mri_slice_segmented):
 
     return uf, px_smooth
 
+
 def __compute_GLCM_properties(mri_slice_segmented):
     glcm_properties = []
 
     # It is necessary to convert the image to uint8 to use the function
-    mri_slice_segmented_uint8 = mri_slice_segmented*255/np.max(mri_slice_segmented)
+    mri_slice_segmented_uint8 = mri_slice_segmented * \
+        255/np.max(mri_slice_segmented)
     mri_slice_segmented_uint8 = mri_slice_segmented_uint8.astype(np.uint8)
 
     # GLCM considering a horizontal offset of 5
-    glcm = greycomatrix(mri_slice_segmented_uint8, distances=[5], angles=[0], 
-        levels=256, symmetric=True, normed=True)
+    glcm = greycomatrix(mri_slice_segmented_uint8, distances=[5], angles=[0],
+                        levels=256, symmetric=True, normed=True)
 
     # Properties
     glcm_properties.append(greycoprops(glcm, 'contrast')[0][0])
@@ -197,6 +215,7 @@ def __compute_GLCM_properties(mri_slice_segmented):
     glcm_properties.append(greycoprops(glcm, 'ASM')[0][0])
 
     return glcm_properties
+
 
 def __compute_Hu_moments(mri_slice_segmented):
     M_c = measure.moments_central(mri_slice_segmented)

@@ -256,20 +256,46 @@ def __get_brain_bse_mask(raw_slices, coarse_masks):
     if regions:
         bse_masks = bse_masks + np.where(all_labels == regions[0].label, 1, 0)
 
+    for index in enumerate(slices_binary):
+        bse_masks[index[0], :, :] = morphology.closing(
+            bse_masks[index[0], :, :], morphology.disk(3))
+        bse_masks[index[0], :, :] = ndimage.binary_fill_holes(
+            bse_masks[index[0], :, :])
+
+    bse_masks = ndimage.binary_fill_holes(bse_masks)
+    bse_masks = morphology.closing(bse_masks, morphology.octahedron(3))
+    bse_masks = morphology.closing(bse_masks, morphology.octahedron(2))
+
+    for index in enumerate(slices_binary):
+        bse_masks[index[0], :, :] = morphology.closing(
+            bse_masks[index[0], :, :], morphology.disk(3))
+        bse_masks[index[0], :, :] = ndimage.binary_fill_holes(
+            bse_masks[index[0], :, :])
+
+    bse_masks = ndimage.binary_fill_holes(bse_masks)
+
     return bse_masks
 
 
 def __get_consensus_mask(coarse_masks, thresh_masks, kmeans_mask, bse_masks):
-    consensus_mask = np.empty(coarse_masks.shape, dtype=bool)
-    for index in range(consensus_mask.shape[0]):
-        for row in range(consensus_mask.shape[1]):
-            for col in range(consensus_mask.shape[2]):
-                vals = [thresh_masks[index, row, col],
-                        kmeans_mask[index, row, col]*2, bse_masks[index, row, col]]
-                if (coarse_masks[index, row, col] and sum(vals) > 1):
-                    consensus_mask[index, row, col] = True
-                else:
-                    consensus_mask[index, row, col] = False
+
+    consensus_mask = np.logical_and(
+        ((thresh_masks + kmeans_mask * 2 + bse_masks * 2) > 2), coarse_masks)
+    # consensus_mask = morphology.opening(
+    #     consensus_mask, morphology.octahedron(3))
+    # consensus_mask = morphology.opening(
+    #     consensus_mask, morphology.octahedron(3))
+
+    # for index in range(consensus_mask.shape[0]):
+    #     slc = consensus_mask[index, :, :]
+    #     all_labels = measure.label(slc)
+    #     regions = measure.regionprops(all_labels)
+    #     regions.sort(key=lambda region: region.area, reverse=True)
+    #     slc = np.ndarray([slc.shape[0], slc.shape[1]], dtype=np.int8)
+    #     slc[:] = 0
+    #     if regions:
+    #         slc = slc + np.where(all_labels == regions[0].label, 1, 0)
+    #     consensus_mask[index, :, :] = slc
 
     # Fill holes mask
     consensus_mask = morphology.opening(
@@ -288,8 +314,13 @@ def __get_consensus_mask(coarse_masks, thresh_masks, kmeans_mask, bse_masks):
         consensus_mask, morphology.octahedron(3))
 
     for index in range(consensus_mask.shape[0]):
+        consensus_mask[index, :, :] = morphology.closing(
+            consensus_mask[index, :, :], morphology.disk(1))
         consensus_mask[index, :, :] = ndimage.binary_fill_holes(
             consensus_mask[index, :, :])
+
+    consensus_mask = morphology.closing(
+        consensus_mask, morphology.octahedron(5))
 
     return consensus_mask
 
@@ -334,8 +365,10 @@ def image_skull_strip(raw_slices, display=False):
 
 def image_preprocessing_brainweb(raw_slices, display=False):
     masks = __skull_strip_mcstrip_algorithm(raw_slices, display)
+    masks['consensus'] = masks['consensus'].astype(np.int16)
 
     no_skull_slices = apply_mask(raw_slices, masks["consensus"])
+    no_skull_slices = no_skull_slices.astype(np.int16)
     return masks, no_skull_slices
 
 
@@ -358,7 +391,7 @@ def standarization_landmark_extraction(raw_slices, subjects, s1, s2, pc1, pc2, l
                 x_array[mri] = []
             x_array[mri].append(x_p)
             if display:
-                img_utils.plot_hist_peaks(s, hist, peaks)
+                img_utils.plot_hist_peaks(s, hist, peaks[0])
 
     # Store landmarks
     x_p_mean = {}
@@ -416,7 +449,7 @@ def mri_standarization(raw_slices, subjects, landmark_filename, display=False):
                 [hist, edges] = np.histogram(raw_slices[s][mri_type], bins=m2)
                 peaks = find_peaks(hist, prominence=1, width=3,
                                    height=700, distance=3)
-                img_utils.plot_hist_peaks(s, hist, peaks)
+                img_utils.plot_hist_peaks(s, hist, peaks[0])
                 img_utils.plot_stack(s, raw_slices[s][mri_type])
 
     return raw_slices

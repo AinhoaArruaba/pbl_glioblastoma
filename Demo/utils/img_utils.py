@@ -16,7 +16,7 @@ def plot_hist_peaks(subject, hist, peaks):
     plt.xlabel("Voxel values")
     plt.ylabel("Frequency")
     plt.title(subject)
-    plt.plot(peaks[0], hist[peaks[0]], 'x')
+    plt.plot(peaks, hist[peaks], 'x')
     plt.show()
 
 
@@ -68,8 +68,9 @@ def plot_stack(subject, img, rows=6, cols=4, start_with=0, block=True):
         plt.pause(10)
         plt.close()
 
-def save_stack_contours(fig_name, s, mri_slices_preprocessed, 
-    mri_slices_masks, rows=6, cols=4, start_with=0):
+
+def save_stack_contours(fig_name, s, mri_slices_preprocessed,
+                        mri_slices_masks, rows=6, cols=4, start_with=0):
 
     show_every = round(mri_slices_preprocessed.shape[0]/(rows*cols))
     fig, ax = plt.subplots(rows, cols, figsize=[12, 12])
@@ -78,28 +79,31 @@ def save_stack_contours(fig_name, s, mri_slices_preprocessed,
         if rows != 1:
             if ind < mri_slices_preprocessed.shape[0]:
                 ax[int(i/cols), int(i % cols)].set_title('slice %d' %
-                                                        ind, fontsize=7)
+                                                         ind, fontsize=7)
                 ax[int(i/cols), int(i % cols)
-                ].imshow(mri_slices_preprocessed[ind, :, :], cmap='gray')
-                
+                   ].imshow(mri_slices_preprocessed[ind, :, :], cmap='gray')
+
                 contours = measure.find_contours(mri_slices_masks[ind, :, :])
                 if len(contours):
-                    ax[int(i/cols), int(i % cols)].scatter(x=contours[0][:,1], y=contours[0][:,0], c='r', s=1)
-            
+                    ax[int(i/cols), int(i % cols)].scatter(x=contours[0]
+                                                           [:, 1], y=contours[0][:, 0], c='r', s=1)
+
             ax[int(i/cols), int(i % cols)].axis('off')
         else:
             if ind < mri_slices_preprocessed.shape[0]:
                 ax[ind].set_title('slice %d' % ind, fontsize=7)
                 ax[ind].imshow(mri_slices_preprocessed[ind, :, :], cmap='gray')
-                
+
                 contours = measure.find_contours(mri_slices_masks[ind, :, :])
                 if len(contours):
-                    ax[int(i/cols), int(i % cols)].scatter(x=contours[0][:,1], y=contours[0][:,0], c='r', s=1)
+                    ax[int(i/cols), int(i % cols)].scatter(x=contours[0]
+                                                           [:, 1], y=contours[0][:, 0], c='r', s=1)
 
             ax[ind].axis('off')
 
     fig.suptitle(s)
     plt.savefig(fig_name, bbox_inches='tight')
+
 
 def plot_stack_documentation_img(subject, img, titles, rows=6, cols=4, start_with=0):
     show_every = int(img.shape[0]/(rows*cols))
