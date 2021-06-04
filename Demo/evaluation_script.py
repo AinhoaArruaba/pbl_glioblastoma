@@ -132,7 +132,7 @@ if __name__ == "__main__":
 
     # READ DATABASE
     eval_database_path = os.path.join(os.path.dirname(
-        os.path.abspath(__file__)), "database_eval")
+        os.path.abspath(__file__)), "dataset_eval")
     subject_path_list = [os.path.join(eval_database_path, folder) for folder in os.listdir(
         eval_database_path) if os.path.isdir(os.path.join(eval_database_path, folder))]
     subject_path_list.sort()

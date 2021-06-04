@@ -275,7 +275,7 @@ def __get_brain_bse_mask(raw_slices, coarse_masks):
 def __get_consensus_mask(coarse_masks, thresh_masks, kmeans_mask, bse_masks):
 
     consensus_mask = np.logical_and(
-        ((thresh_masks + kmeans_mask * 2 + bse_masks * 2) > 2), coarse_masks)
+        ((thresh_masks + kmeans_mask * 0 + bse_masks * 2) > 2), coarse_masks)
     # consensus_mask = morphology.opening(
     #     consensus_mask, morphology.octahedron(3))
     # consensus_mask = morphology.opening(
@@ -292,6 +292,7 @@ def __get_consensus_mask(coarse_masks, thresh_masks, kmeans_mask, bse_masks):
     #         slc = slc + np.where(all_labels == regions[0].label, 1, 0)
     #     consensus_mask[index, :, :] = slc
 
+    consensus_mask = bse_masks
     # Fill holes mask
     consensus_mask = morphology.opening(
         consensus_mask, morphology.octahedron(1))
@@ -315,7 +316,13 @@ def __get_consensus_mask(coarse_masks, thresh_masks, kmeans_mask, bse_masks):
             consensus_mask[index, :, :])
 
     consensus_mask = morphology.closing(
-        consensus_mask, morphology.octahedron(5))
+        consensus_mask, morphology.octahedron(2))
+
+    for index in range(consensus_mask.shape[0]):
+        consensus_mask[index, :, :] = morphology.closing(
+            consensus_mask[index, :, :], morphology.disk(1))
+        consensus_mask[index, :, :] = ndimage.binary_fill_holes(
+            consensus_mask[index, :, :])
 
     return consensus_mask
 
