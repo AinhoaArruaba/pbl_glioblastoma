@@ -17,6 +17,10 @@ library(gridExtra)
 library(ggplot2)
 library(ggpmisc)
 library(data.table)
+library(dplyr)
+library(tidyr)
+library(purrr)
+
 ```
 
 Este script muestra los pasos seguidos para el análisis de los factores de riesgo que pueden llevar al desarrollo de un glioblastoma multiforme (GBM) y no sobrevivir. Además, se incluyen también las características extraidas de los escáneres MRI de los pacientes.
@@ -33,11 +37,36 @@ dataset_images_12month$gender <- as.factor(dataset_images_12month$gender)
 
 # Cargar características extraidas de las imágenes
 
-Hay que cargar el fichero CSV creado a partir de las características extraidas de las imágenes y unirlo con el dataset de los factores de riesgo usando el ID de los pacientes. Además, como no se disponen imágenes de todos los pacientes, se eliminarán aquellos pacientes de los que solo se dispongan metadatos.
+Hay que cargar el fichero CSV creado a partir de las características extraidas de las imágenes y unirlo con el dataset de los factores de riesgo usando el ID de los pacientes. Además, como no se disponen imágenes de todos los pacientes, se eliminarán aquellos pacientes de los que solo se dispongan metadatos. Se cambia la forma en la que estaban representados los NA en el CSV de las características para que coincida con el dataset de los factores de riesgo.
+
+* Debido a que algunos de los NA presentes en el dataset de las características se dan en casos en los que no es posible calcular esas características porque no se ha encontrado ningún tumor o edema por ejemplo, se sustituirán estos valores por un valor extremo como puede ser "-99999". Así, se ve que estas entradas son especiales y se podrán tener en cuenta. Esto se da cuando el volumen del edema o del tumor es 0 y tiene algún NA.
+
+* Aun así, hay una excepción para los casos anteriores. Los casos en los que todos los valores son NA (incluyendo el volumen del tumor o del edema) deberán ser imputados ya que no significa que no se haya encontrado ningún tumor, sino que no se dispone de un escáner para analizarlo. También hay algún caso donde se ha detectado una anomalía pero existe al menos un NA. Estos NA no se cambiarán para que sean imputados después.
 
 ```{r}
 filename <- "features/features.csv"
 dataset_features <- read.csv(filename, header=TRUE)
+dataset_features[dataset_features == "NaN"] <- NA
+
+#na_df <- dataset_features[rowSums(is.na(dataset_features)) > 0,]
+#dataset_features <- dataset_features[complete.cases(dataset_features), ]
+
+tumor_volume_0_DF <- dataset_features[ which( dataset_features$tumor_volume == 0), ]
+edema_volume_0_DF <- dataset_features[ which( dataset_features$edema_volume == 0), ]
+dataset_na <- dataset_features[ which( is.na(dataset_features$tumor_mri_type) | is.na(dataset_features$edema_mri_type)) , ]
+dataset_features <- dataset_features[ which( dataset_features$tumor_volume != 0 & dataset_features$edema_volume != 0) , ]
+
+# Fill tumor values
+index <- tumor_volume_0_DF$tumor_volume == 0
+index[is.na(index)] <- FALSE
+tumor_volume_0_DF[which(rowSums(is.na(tumor_volume_0_DF[index, c(4:27)])) > 10), c(4:27)] <- -99999
+
+# Fill edema values
+index <- edema_volume_0_DF$edema_volume == 0
+index[is.na(index)] <- FALSE
+edema_volume_0_DF[which(rowSums(is.na(edema_volume_0_DF[index, c(30:53)])) > 10), c(30:53)] <- -99999
+
+dataset_features <- rbind(dataset_features, tumor_volume_0_DF, edema_volume_0_DF, dataset_na)
 
 dataset_images_merge <- merge(dataset_images_12month, dataset_features, by="case_id", all=TRUE)
 dataset_images_merge <- dataset_images_merge[!is.na(dataset_images_merge$tumor_volume),]
@@ -45,14 +74,12 @@ dataset_images_merge <- dataset_images_merge[!is.na(dataset_images_merge$tumor_v
 
 # Ajustar el nuevo dataset
 
-Hay que comprobar si hace falta ajustar el tipo de dato de ciertas variables. Además, cambiar la forma en la que estaban representados los NA en el CSV de las características para que coincida con el dataset de los factores de riesgo.
+Hay que comprobar si hace falta ajustar el tipo de dato de ciertas variables.
 
 ```{r}
 sapply(dataset_images_merge, class)
 dataset_images_merge$tumor_mri_type <- as.factor(dataset_images_merge$tumor_mri_type)
 dataset_images_merge$edema_mri_type <- as.factor(dataset_images_merge$edema_mri_type)
-
-dataset_images_merge[dataset_images_merge == "NaN"] <- NA
 ```
 
 ## EXPLORATORY DATA ANALYSIS
@@ -60,6 +87,7 @@ dataset_images_merge[dataset_images_merge == "NaN"] <- NA
 En este dataset se diferencian tres variables de clase distintas: cause_of_death_at_12months_follow_up o la causa de la muerte si es que la hay a los 12 meses, vital_status_at_12months_follow_up o el estado del paciente (vivo/muerto) a los 12 meses y life_expectancy o los dias que han pasado desde el diagnóstico del GBM hasta su muerte si es que la hay.
 
 ```{r EDA}
+set.seed(173)
 dataset_images_merge_red <- dataset_images_merge
 
 # Missing values
@@ -95,20 +123,34 @@ non_numeric_var_indexes <- non_numeric_var_indexes[-which(non_numeric_var_indexe
 dim(dataset_images_merge_red)
 
 missmap(dataset_images_merge_red, col=c("black", "grey"), legend=FALSE)
+
 # Histogramas de las variables numéricas
 par(mfrow=c(1, 4))
 for(i in 1:length(numeric_var_indexes)) {
     hist(dataset_images_merge_red[,numeric_var_indexes[i]], main=names(dataset_images_merge_red)[numeric_var_indexes[i]])
 }
+
 # Barplots de las variables no numéricas
 par(mfrow=c(1, 3))
 for(i in 1:length(non_numeric_var_indexes)) {
     barplot(table(dataset_images_merge_red[,non_numeric_var_indexes[i]]), main=names(dataset_images_merge_red)[non_numeric_var_indexes[i]], las=2)
 }
+
 # Correlación de las variables numéricas
+# Se muestran solo las variables con una correlación mayor a 0.85 para facilitar su visualización.
 par(mfrow=c(1, 1))
-correlation_numeric_vars <- cor(dataset_images_merge_red[, c(numeric_var_indexes, life_expectancy_index)], use = "complete.obs")
-corrplot(correlation_numeric_vars, method="circle")
+correlation_numeric_vars_initial <- cor(dataset_images_merge_red[, c(numeric_var_indexes, life_expectancy_index)], use = "complete.obs")
+correlation_numeric_vars <- correlation_numeric_vars_initial
+correlation_numeric_vars[correlation_numeric_vars == 1] <- NA 
+
+correlation_numeric_vars <- as.data.frame(as.table(correlation_numeric_vars))
+correlation_numeric_vars <- na.omit(correlation_numeric_vars)
+sig <- 0.85
+correlation_numeric_vars <- subset(correlation_numeric_vars, abs(Freq) > sig)
+correlation_numeric_vars <- correlation_numeric_vars[order(-abs(correlation_numeric_vars$Freq)),] 
+print(correlation_numeric_vars)
+mtx_corr <- reshape2::acast(correlation_numeric_vars, Var1~Var2, value.var="Freq")
+corrplot(mtx_corr, is.corr=FALSE, tl.col="black", na.label=" ", tl.cex=0.5)
 
 # Valores del skewness
 for(i in 1:length(numeric_var_indexes)){
@@ -123,44 +165,68 @@ De los datos extraidos en este punto se han realizado las siguientes observacion
 
   - ethnicity
   - race
-  - number_of_pack_years_smoked
   - years_high_alcohol_quantity_consumed
+  - number_of_pack_years_smoked
   - alcohol consumption
   - tobacco_smoking_history
   - life_expectancy
   
-* De las cuales las primeras dos no llegan al 60% de datos completos y las otras dos si. Se ha decidido el eliminar aquellas variables que no llegan al 60%, teniendo que imputar los valores de las variables number_of_pack_years_smoked y years_high_alcohol_quantity_consumed en la fase de preprocesado.
+* De las cuales las primeras tres no llegan al 60% de datos completos y las otras cuatro sí. Se ha decidido el eliminar aquellas variables que no llegan al 60%, teniendo que imputar los valores de las variables number_of_pack_years_smoked en la fase de preprocesado. La variable years_high_alcohol_quantity_consumed ha sido eliminada pero se le da más importancia a number_of_pack_years_smoked teniendo en cuenta los resultados obtenidos en el análisis previo de los factores de riesgo.
 
 * La variable life_expectancy también contiene muchos valores NA pero no preocupan por el momento, ya que estos valores se corresponden a pacientes que siguen vivos. Además, debido a que el dataset corresponde a datos que se han ido recogiendo durante más de un año, la variable también contiene valores mayores que 365. Esto significa que estos pacientes estaban vivos a los 12 meses pero han fallecido mientras estaban en seguimiento más adelante. Aun así, esto no se puede saber a los 12 meses que es cuando se está realizando el análisis por lo que estas entradas se tienen que reemplazar por NA.
 
-* En la variable tumor_size hay un único valor NA que tendrá que ser imputado.
+* Además, la variable time_monitored también contiene valores mayores que 365 pero como se está realizando el análisis a los 12 meses, se decide limitar estos valores a 365.
 
-* Además, las entradas que no llegan al 70% de variables definidas se han eliminado del dataset, eliminando un total de 4 entradas.
+* En la variable tumor_size hay 4 valores NA que tendrán que ser imputados.
+
+* 3 de estas entradas NA corresponden a 3 pacientes de los cuales se tienen imágenes MRI de donde se han sacado características pero no se disponen metadatos de estos pacientes. Por ello, se decide eliminar estos 3 casos.
+
+* Además, las entradas que no llegan al 70% de variables definidas se han eliminado del dataset, eliminando un total de 3 entradas.
 
 * En general, los valores del skewness no son muy altos, solo algunas características extraidas tienen un valor mayor. Para no cambiar los valores de las características extraidas, no se plantea la corrección del skewness en el apartado de preprocesamiento.
 
+## Limitación de variables a 12 meses
+Ya que se va a realizar el análisis a los 12 meses, se limitan las variables a este intervalo.
 
 ```{r}
 summary(dataset_images_merge_red$life_expectancy)
-
 dataset_images_merge_red[which(dataset_images_merge_red$life_expectancy > 365, arr.ind = TRUE), names(dataset_images_merge_red) == 'life_expectancy'] <- NA
-
 summary(dataset_images_merge_red$life_expectancy)
-```
-Por cada variable de clase se crea un dataset distinto con el objetivo de analizarlas por separado.
 
-## Eliminación de variables altamente correladas
-Se van a eliminar las variables altamente correladas del dataset para evitar problemas de multicolinearidad y overfitting.
+summary(dataset_images_merge_red$time_monitored)
+dataset_images_merge_red[which(dataset_images_merge_red$time_monitored > 365, arr.ind = TRUE), names(dataset_images_merge_red) == 'time_monitored'] <- 365
+summary(dataset_images_merge_red$time_monitored)
+```
+
+## Eliminación de pacientes sin metadatos
+Se van a eliminar los pacientes detectados sin metadatos.
 
 ```{r}
 dim(dataset_images_merge_red)
+dataset_images_merge_red <- dataset_images_merge_red[!is.na(dataset_images_merge_red$age),]
+dim(dataset_images_merge_red)
+```
+
+## Eliminación de variables altamente correladas
+Se van a eliminar las variables altamente correlacionadas del dataset para evitar problemas de multicolinealidad y overfitting.
+
+```{r}
+set.seed(173)
+case_id_index <- which(names(dataset_images_merge_red) == 'case_id', arr.ind = TRUE)
+dim(dataset_images_merge_red)
 # find attributes that are highly corrected
-cutoff <- 0.8
-highlyCorrelated <- findCorrelation(correlation_numeric_vars, cutoff=cutoff)
+cutoff <- 0.85
+highlyCorrelated <- findCorrelation(correlation_numeric_vars_initial, cutoff=cutoff)
 # create a new dataset without highly correlated features
 dataset_images_12month_features <- dataset_images_merge_red[,-highlyCorrelated]
+
 dim(dataset_images_12month_features)
+
+cause_of_death_index <- which(names(dataset_images_12month_features) == 'cause_of_death_at_12months_follow_up', arr.ind = TRUE)
+vital_status_index <- which(names(dataset_images_12month_features) == 'vital_status_at_12months_follow_up', arr.ind = TRUE)
+life_expectancy_index <- which(names(dataset_images_12month_features) == 'life_expectancy', arr.ind = TRUE)
 ```
+Por cada variable de clase se crea un dataset distinto con el objetivo de analizarlas por separado.
 
 ## Análisis del estado del paciente (vivo/muerto)
 
@@ -197,30 +263,27 @@ featurePlot(x=dataset_vital_status[, numeric_var_indexes_vital[13:16]],
             scales = list(y = list(relation="free"),
                           x = list(rot = 30)),
             layout = c(4, 1))
-featurePlot(x=dataset_vital_status[, numeric_var_indexes_vital[17:20]],
+featurePlot(x=dataset_vital_status[, numeric_var_indexes_vital[17:21]],
             y=dataset_vital_status$vital_status_at_12months_follow_up, plot="box",
             scales = list(y = list(relation="free"),
                           x = list(rot = 30)),
-            layout = c(4, 1))
-featurePlot(x=dataset_vital_status[, numeric_var_indexes_vital[21:24]],
-            y=dataset_vital_status$vital_status_at_12months_follow_up, plot="box",
-            scales = list(y = list(relation="free"),
-                          x = list(rot = 30)),
-            layout = c(4, 1))
-featurePlot(x=dataset_vital_status[, numeric_var_indexes_vital[25:28]],
-            y=dataset_vital_status$vital_status_at_12months_follow_up, plot="box",
-            scales = list(y = list(relation="free"),
-                          x = list(rot = 30)),
-            layout = c(4, 1))
-featurePlot(x=dataset_vital_status[, numeric_var_indexes_vital[29:32]],
-            y=dataset_vital_status$vital_status_at_12months_follow_up, plot="box",
-            scales = list(y = list(relation="free"),
-                          x = list(rot = 30)),
-            layout = c(4, 1))
+            layout = c(5, 1))
 
 #Barplots
 barplot(table(dataset_vital_status[, c(non_numeric_var_indexes_vital[2], class_val_index)]), 
         main = names(dataset_vital_status)[non_numeric_var_indexes_vital[2]], 
+        col = brewer.pal(n = 4, name = "Set2"),
+        las = 2,
+        xlim = c(0, 4),
+        ylim = c(0, 100),
+        legend.text = TRUE,
+        args.legend = list(x = "topright", 
+                           legend = c("= or < 1-2 drinks/day",
+                                      "> 1-2 drinks/day", "Consumed in the past", "Lifelong non-drinker"),
+                           fill = brewer.pal(n = 4, name = "Set2"),
+                           ncol = 1))
+barplot(table(dataset_vital_status[, c(non_numeric_var_indexes_vital[3], class_val_index)]), 
+        main = names(dataset_vital_status)[non_numeric_var_indexes_vital[3]], 
         col = brewer.pal(n = 2, name = "Set2"),
         las = 2,
         xlim = c(0, 4),
@@ -230,8 +293,8 @@ barplot(table(dataset_vital_status[, c(non_numeric_var_indexes_vital[2], class_v
                            legend = c("Female", "Male"),
                            fill = brewer.pal(n = 2, name = "Set2"),
                            ncol = 1))
-barplot(table(dataset_vital_status[, c(non_numeric_var_indexes_vital[3], class_val_index)]), 
-        main = names(dataset_vital_status)[non_numeric_var_indexes_vital[3]], 
+barplot(table(dataset_vital_status[, c(non_numeric_var_indexes_vital[4], class_val_index)]), 
+        main = names(dataset_vital_status)[non_numeric_var_indexes_vital[4]], 
         col = brewer.pal(n = 5, name = "Set2"),
         las = 2,
         xlim = c(0, 4),
@@ -242,14 +305,6 @@ barplot(table(dataset_vital_status[, c(non_numeric_var_indexes_vital[3], class_v
                                       "Current smoker", "Lifelong non-smoker"),
                            fill = brewer.pal(n = 5, name = "Set2"),
                            ncol = 1))
-barplot(table(dataset_vital_status[, c(non_numeric_var_indexes_vital[4], class_val_index)]), 
-        main = names(dataset_vital_status)[non_numeric_var_indexes_vital[4]], 
-        col = c("white", "blue", "brown", "coral", "cyan", "darkgray", "darkblue", "darkolivegreen", "gray", "gold",
-                "green", "lavender", "khaki", "lightblue", "orange", "palegreen", "navy", "red", "salmon", "purple",
-                "yellow", "turquoise"),
-        las = 2,
-        xlim = c(0, 4),
-        ylim = c(0, 40))
 
 
 # Class imbalance
@@ -257,13 +312,13 @@ cbind(Label_freq=table(dataset_vital_status$vital_status_at_12months_follow_up),
 ```
 Con los datos obtenidos se concluyen los siguientes puntos.
 
-* Se observa que el dataset está más o menos balanceado (40% de pacientes muertos y 60% vivos).
+* Se observa que el dataset está más o menos balanceado (43.75% de pacientes muertos y 56.25% vivos).
 
-* Analizando los boxplots y los barplots creados, no se puede determinar una separación clara entre las distintas variables de clase. La realidad es que hay ciertas tendencias, por ejemplo, parece que la mayoría de los que han muerto tenian un tamaño de tumor algo más alto como mediana, o que los supervivientes tienen una mediana mayor respecto al contraste, disimilitud y entropía del tumor, pero no se observa que ninguna variable sea determinante para predicción de el estado del paciente.
+* Analizando los boxplots y los barplots creados, no se puede determinar una separación clara entre las distintas variables de clase. La realidad es que hay ciertas tendencias, por ejemplo, parece que la mayoría de los que han muerto tenían un tamaño de tumor algo más alto como mediana. También se han observado ciertas variaciones en la distancia Y desde el centroide del cerebro al centroide del tumor y en la desviación estándar de los tumores. Pero no se observa que ninguna variable sea determinante para una predicción clara del estado del paciente. También parece que los que nunca han fumado tienden a sobrevivir.
 
 # Análisis de la causa de muerte
 
-Se analiza la causa de la muerte siendo en su mayoría por GBM, aunque aparecen otras posibles causas. Además, hay que tener un cuenta que el 60% de los pacientes siguen vivos.
+Se analiza la causa de la muerte siendo en su mayoría por GBM, aunque aparecen otras posibles causas. Además, hay que tener un cuenta que casi el 60% de los pacientes siguen vivos.
 
 ```{r EDA cause of death}
 dataset_cause <- dataset_images_12month_features
@@ -299,30 +354,27 @@ featurePlot(x=dataset_cause[, numeric_var_indexes_cause[13:16]],
             scales = list(y = list(relation="free"),
                           x = list(rot = 30)),
             layout = c(4, 1))
-featurePlot(x=dataset_cause[, numeric_var_indexes_cause[17:20]],
+featurePlot(x=dataset_cause[, numeric_var_indexes_cause[17:21]],
             y=dataset_cause$cause_of_death_at_12months_follow_up, plot="box",
             scales = list(y = list(relation="free"),
                           x = list(rot = 30)),
-            layout = c(4, 1))
-featurePlot(x=dataset_cause[, numeric_var_indexes_cause[21:24]],
-            y=dataset_cause$cause_of_death_at_12months_follow_up, plot="box",
-            scales = list(y = list(relation="free"),
-                          x = list(rot = 30)),
-            layout = c(4, 1))
-featurePlot(x=dataset_cause[, numeric_var_indexes_cause[25:28]],
-            y=dataset_cause$cause_of_death_at_12months_follow_up, plot="box",
-            scales = list(y = list(relation="free"),
-                          x = list(rot = 30)),
-            layout = c(4, 1))
-featurePlot(x=dataset_cause[, numeric_var_indexes_cause[29:32]],
-            y=dataset_cause$cause_of_death_at_12months_follow_up, plot="box",
-            scales = list(y = list(relation="free"),
-                          x = list(rot = 30)),
-            layout = c(4, 1))
+            layout = c(5, 1))
 
 # Barplots for non-numeric variables
 barplot(table(dataset_cause[, c(non_numeric_var_indexes_cause[2], class_val_index)]), 
         main = names(dataset_cause)[non_numeric_var_indexes_cause[2]], 
+        col = brewer.pal(n = 4, name = "Set2"),
+        las = 2,
+        xlim = c(0, 4),
+        ylim = c(0, 100),
+        legend.text = TRUE,
+        args.legend = list(x = "topright", 
+                           legend = c("= or < 1-2 drinks/day",
+                                      "> 1-2 drinks/day", "Consumed in the past", "Lifelong non-drinker"),
+                           fill = brewer.pal(n = 4, name = "Set2"),
+                           ncol = 1))
+barplot(table(dataset_cause[, c(non_numeric_var_indexes_cause[3], class_val_index)]), 
+        main = names(dataset_cause)[non_numeric_var_indexes_cause[3]], 
         col = brewer.pal(n = 2, name = "Set2"),
         las = 2,
         xlim = c(0, 4),
@@ -332,8 +384,8 @@ barplot(table(dataset_cause[, c(non_numeric_var_indexes_cause[2], class_val_inde
                            legend = c("Female", "Male"),
                            fill = brewer.pal(n = 2, name = "Set2"),
                            ncol = 1))
-barplot(table(dataset_cause[, c(non_numeric_var_indexes_cause[3], class_val_index)]), 
-        main = names(dataset_cause)[non_numeric_var_indexes_cause[3]], 
+barplot(table(dataset_cause[, c(non_numeric_var_indexes_cause[4], class_val_index)]), 
+        main = names(dataset_cause)[non_numeric_var_indexes_cause[4]], 
         col = brewer.pal(n = 5, name = "Set2"),
         las = 2,
         xlim = c(0, 4),
@@ -344,14 +396,6 @@ barplot(table(dataset_cause[, c(non_numeric_var_indexes_cause[3], class_val_inde
                                       "Current smoker", "Lifelong non-smoker"),
                            fill = brewer.pal(n = 5, name = "Set2"),
                            ncol = 1))
-barplot(table(dataset_cause[, c(non_numeric_var_indexes_cause[4], class_val_index)]), 
-        main = names(dataset_cause)[non_numeric_var_indexes_cause[4]], 
-        col = c("white", "blue", "brown", "coral", "cyan", "darkgray", "darkblue", "darkolivegreen", "gray", "gold",
-                "green", "lavender", "khaki", "lightblue", "orange", "palegreen", "navy", "red", "salmon", "purple",
-                "yellow", "turquoise"),
-        las = 2,
-        xlim = c(0, 4),
-        ylim = c(0, 40))
 
 # Class imbalance
 cbind(Label_freq=table(dataset_cause$cause_of_death_at_12months_follow_up), Label_percent=prop.table(table(dataset_cause$cause_of_death_at_12months_follow_up))*100)
@@ -359,11 +403,11 @@ cbind(Label_freq=table(dataset_cause$cause_of_death_at_12months_follow_up), Labe
 ```
 Con los datos obtenidos se concluyen los siguientes puntos.
 
-* Se observa que el dataset está no está balanceado (58.33% de pacientes muertos a causa de GBM, 33.33% por Malingnant Brain Neoplasm y 8.33% por Postoperative Edema). Además, solo hay un paciente que ha muerto por Postoperative Edema por lo que no se pueden sacar unas conclusiones concluyentes respecto a esta causa.
+* Se observa que el dataset está no está balanceado (71.43% de pacientes muertos a causa de GBM, 23.81% por Malignant Brain Neoplasm y 4.76% por Postoperative Edema). Además, solo hay un paciente que ha muerto por Postoperative Edema por lo que no se pueden sacar unas conclusiones concluyentes respecto a esta causa.
 
-* En lo que respecta a los boxplots y barplots empleados, no se observa una clara diferencia entre las variables. Si se ha observado que aquellos pacientes con un peso alto tienden ha haber muerto a causa de GBM o por un edema postoperatorio, pero esto puede no ser determinante debido al bajo porcentaje de pacientes que han sufrido de este contratiempo. Otras variables como compactness o glcm_correlation también diferencian a pacientes con distintas causas de muerte pero esta diferencia no es muy significativa.
+* En lo que respecta a los boxplots y barplots empleados, se observa que ciertas variables muestran una ligera diferencia entre clases. Si se ha observado que aquellos pacientes que nunca han fumado suelen morir por el GBM sin otras complicaciones. Otras variables como la desviación estándar del tumor, la distancia entre centroides en el eje Y, la compacidad del tumor o tumor_glcm_ASM también diferencian a pacientes con distintas causas de muerte pero esta diferencia no es muy significativa.
 
-* Se observa que ciertas características del paciente muerto por un edema postoperatorio difieren bastante de las de los demás pero, como se ha dicho antes, una paciente no es suficiente para sacar conclusiones.
+* Se observa que ciertas características del paciente muerto por un edema postoperatorio difieren bastante de las de los demás pero, como se ha dicho antes, un paciente no es suficiente para sacar conclusiones.
 
 # Análisis de la esperanza de vida
 
@@ -405,30 +449,12 @@ featurePlot(x = dataset_life_expect[, numeric_var_indexes_life_expect[13:16]],
             type = c("p", "smooth"),
             span = 1,
             layout= c(2, 2))
-featurePlot(x = dataset_life_expect[, numeric_var_indexes_life_expect[17:20]], 
+featurePlot(x = dataset_life_expect[, numeric_var_indexes_life_expect[17:21]], 
             y = dataset_life_expect$life_expectancy,
             plot = "scatter",
             type = c("p", "smooth"),
             span = 1,
-            layout= c(2, 2))
-featurePlot(x = dataset_life_expect[, numeric_var_indexes_life_expect[21:24]], 
-            y = dataset_life_expect$life_expectancy,
-            plot = "scatter",
-            type = c("p", "smooth"),
-            span = 1,
-            layout= c(2, 2))
-featurePlot(x = dataset_life_expect[, numeric_var_indexes_life_expect[25:28]], 
-            y = dataset_life_expect$life_expectancy,
-            plot = "scatter",
-            type = c("p", "smooth"),
-            span = 1,
-            layout= c(2, 2))
-featurePlot(x = dataset_life_expect[, numeric_var_indexes_life_expect[29:32]], 
-            y = dataset_life_expect$life_expectancy,
-            plot = "scatter",
-            type = c("p", "smooth"),
-            span = 1,
-            layout= c(2, 2))
+            layout= c(2, 3))
 
 # Boxplots
 featurePlot(y=dataset_life_expect[, non_numeric_var_life_expect[2]],
@@ -447,7 +473,7 @@ featurePlot(y=dataset_life_expect[, non_numeric_var_life_expect[4]],
 # Class variable
 plot(density(dataset_life_expect$life_expectancy[which(!is.na(dataset_life_expect$life_expectancy))]), main=names(dataset_life_expect)[class_val_index])
 ```
-* Se puede ver que ciertas variables como skewness o kutosis muestran una relación más o menos lineal con la esperanza de vida. En otras, en cambio, esta relación no está tan clara.
+* Se puede ver que ciertas variables como el tamaño del tumor en cm o BMI muestran una relación más o menos lineal con la esperanza de vida. En otras, en cambio, esta relación no está tan clara.
 
 Para complementar el análisis de la supervivencia, se procede a la creación de modelos de Cox para calcular las probabilidades de supervivencia a los 12 meses. En un principio, debido a los valores NA que contiene el dataset, se crea una regresión de Cox por cada variable, y así analizar el impacto de cada una de ellas independientemente del resto.
 
@@ -460,35 +486,64 @@ Con el objetivo de poder analizar el impacto que todas las variables tienen en l
 sum(is.na(dataset_images_12month_features))
 
 na_loc <- which(is.na(dataset_images_12month_features), arr.ind=TRUE)
-na_loc_colums <- unique(na_loc[,2])
-na_loc_colums <- na_loc_colums[-which(na_loc_colums == life_expectancy_index, arr.ind=TRUE)]
+na_loc_columns <- unique(na_loc[,2])
+na_loc_columns <- na_loc_columns[-which(na_loc_columns == life_expectancy_index, arr.ind=TRUE)]
 
 # Variables con valores NA presentes
-names(dataset_images_12month_features)[na_loc_colums]
+names(dataset_images_12month_features)[na_loc_columns]
+case_id_index <- which(names(dataset_images_12month_features) == 'case_id', arr.ind = TRUE)
 
-dataset_images_12month_features_completed <- dataset_images_12month_features[, -life_expectancy_index]
+dataset_images_12month_features_completed <- dataset_images_12month_features[, -c(life_expectancy_index, case_id_index)]
 
 imp_pmm <- mice(dataset_images_12month_features_completed, m = 3, method= "pmm", printFlag = FALSE, seed = 7)
 dataset_images_12month_features_completed <- complete(imp_pmm)
 
-#imp_pmm <- mice(dataset_images_12month_features_completed, m = 1, method= "pmm", printFlag = FALSE, seed = 3)
-#dataset_images_12month_features_completed <- complete(imp_pmm)
+for(row in 1:dim(dataset_images_12month_features_completed)[1]){
+  if(dataset_images_12month_features_completed[row, ]$tobacco_smoking_history == "Lifelong non-smoker: Less than 100 cigarettes smoked in lifetime" && dataset_images_12month_features_completed[row, ]$number_of_pack_years_smoked != 0) {
+    dataset_images_12month_features_completed[row, ]$number_of_pack_years_smoked <- 0
+  } else if(dataset_images_12month_features_completed[row, ]$tobacco_smoking_history != "Lifelong non-smoker: Less than 100 cigarettes smoked in lifetime" && dataset_images_12month_features_completed[row, ]$number_of_pack_years_smoked == 0){
+    dataset_images_12month_features_completed[row, ]$number_of_pack_years_smoked <- NA
+  }
+}
+
+imp_pmm <- mice(dataset_images_12month_features_completed, m = 1, method= "pmm", printFlag = FALSE, seed = 3)
+dataset_images_12month_features_completed <- complete(imp_pmm)
 
 # Cantidad de valores NA después de imputar
 print(sum(is.na(dataset_images_12month_features_completed)))
+```
+
+* Podemos ver que el dataset imputado todavía contiene valores NA en las variables tumor_Hu_6, edema_Hu_3, edema_Hu_4, edema_Hu_5, edema_Hu_6, edema_Hu_7. Esto se debe a que el algoritmo ha detectado que estas variables son colineales con otras. Por lo tanto, se decide eliminar estas variables del dataset antes de terminar con la imputación.
+```{r}
+# Eliminar columnas que contienen NA
+dataset_images_12month_features_completed <- dataset_images_12month_features_completed[ , colSums(is.na(dataset_images_12month_features_completed)) == 0]
+
+# Cantidad de valores NA tras finalizar el proceso
+print(sum(is.na(dataset_images_12month_features_completed)))
 
 dataset_images_12month_features_completed$life_expectancy <- dataset_images_12month_features$life_expectancy
+dataset_images_12month_features_completed$case_id <- dataset_images_12month_features$case_id
+
+print(sum(is.na(dataset_images_12month_features_completed)))
 ```
+* Se puede ver que tras eliminar las variables que presentaban una colinealidad, el dataset no tiene ningún valor NA. Los únicos valores NA presentes ahora son los de life_expectancy que corresponden a pacientes vivos.
+
 ## REGRESIÓN DE COX
 
 El primer método empleado para determinar las probabilidades de supervivencia del paciente es la regresión de Cox. Una vez contamos con el dataset con los valores imputados, procedemos a calcular la regresión de Cox con todas las variables disponibles.
+
+Aun así, tras haber probado con todas las variables se excluyen "edema_glcm_correlation" y "edema_glcm_ASM" ya que dan un coeficiente infinito y no converge.
+
 ```{r}
 dataset_survival <- dataset_images_12month_features_completed
-dataset_survival$vital_status <- as.numeric(dataset_survival$vital_status)
-dataset_survival$vital_status[which(dataset_survival$vital_status == 2)] <- 0
+dataset_survival$vital_status_at_12months_follow_up <- as.numeric(dataset_survival$vital_status_at_12months_follow_up)
+dataset_survival$vital_status_at_12months_follow_up[which(dataset_survival$vital_status_at_12months_follow_up == 2)] <- 0
 
-cox.model.all_vars <- coxph(Surv(time_monitored, vital_status) ~ age + gender + bmi + alcohol_consumption + years_high_alcohol_quantity_consumed + tobacco_smoking_history + number_of_pack_years_smoked + weight_in_kg + height_in_cm + tumor_site + tumor_size_in_cm, data = dataset_survival)
+set.seed(173)
+
+cox.model.all_vars <- coxph(Surv(time_monitored, vital_status_at_12months_follow_up) ~ age + gender + alcohol_consumption + bmi + tobacco_smoking_history + number_of_pack_years_smoked + height_in_cm + tumor_size_in_cm + tumor_dist_y + tumor_compactness + tumor_std + tumor_kur + tumor_smoothness + tumor_glcm_ASM + edema_kur, data = dataset_survival)
 summary(cox.model.all_vars, digits = 3)
+
 cox.model.all_vars.fit <- survfit(cox.model.all_vars)
 
 df <- data.frame(cox.model.all_vars.fit$time, cox.model.all_vars.fit$surv, "Cox")
@@ -499,10 +554,12 @@ ggplot(df, aes(x = Time, y = Survival, color = Model)) + geom_line() + ylim(0, 1
 anova(cox.model.all_vars)
 ```
 
-Mediante los tests ANOVA se ha determinado la relevancia de las variables en el modelo de Cox. La mayoría de ellos no parecen ser relevantes (p < 0.05), estando por debajo de ese valor únicamente las variables de edad, BMI y historial de consumo de alcohol (age, bmi y alcohol_consumption). Para asegurarnos de que esto se cumple, creamos un segundo modelo de Cox solo con las variables determinadas como relevantes y comparamos los resultados de los dos modelos mediante los tests ANOVA.
+Mediante los tests ANOVA se ha determinado la relevancia de las variables en el modelo de Cox. La mayoría de ellos no parecen ser relevantes (p < 0.05), estando por debajo de ese valor únicamente las variables de BMI, kurtosis del edema y género (bmi, edema_kur y gender). Para asegurarnos de que esto se cumple, creamos un segundo modelo de Cox solo con las variables determinadas como relevantes y comparamos los resultados de los dos modelos mediante los tests ANOVA.
 
 ```{r}
-cox.model.select_vars <- coxph(Surv(time_monitored, vital_status) ~ age + bmi + alcohol_consumption, data = dataset_survival)
+set.seed(173)
+
+cox.model.select_vars <- coxph(Surv(time_monitored, vital_status_at_12months_follow_up) ~ bmi + gender  + edema_kur, data = dataset_survival)
 # summary(cox.model.select_vars, digits = 3)
 cox.model.select_vars.fit <- survfit(cox.model.select_vars)
 summary(cox.model.select_vars, digits = 3)
@@ -516,23 +573,25 @@ anova(cox.model.select_vars)
 anova(cox.model.select_vars, cox.model.all_vars, test = "LRT")
 ```
 
-El test ANOVA muestra un valor p > 0.05 por lo que podemos concluir que la diferencia entre ambos modelos no es relevante, confirmando que las variables seleccionadas son suficiente para calcular el modelo de supervivencia y que son las más determinantes a la hora de predecir las probabilidades de supervivencia del paciente que padece de GBM.
+El test ANOVA muestra un valor p > 0.05 por lo que podemos concluir que la diferencia entre ambos modelos no es relevante, confirmando que las tres variables seleccionadas son suficiente para calcular el modelo de supervivencia y que son las más determinantes a la hora de predecir las probabilidades de supervivencia del paciente que padece de GBM.
 
 ## RANDOM FOREST
 
-Para comparar el modelo de supervivencia obtenido mediante la regresión de Cox con otro modelo se implementa otro modelo basádo en el algoritmo Random Forest.  Se calcula el modelo de supervivencia de todas las variables y obtenemos las importancias asignadas a cada una de las variables por el modelo mediante el método de permutación. Esta métrica nos permite determinan como aumenta el error en la predicción al eliminar la variable.
+Para comparar el modelo de supervivencia obtenido mediante la regresión de Cox con otro modelo se implementa otro modelo basádo en el algoritmo Random Forest.  Se calcula el modelo de supervivencia de todas las variables (incluyendo las variables "edema_glcm_correlation" y "edema_glcm_ASM" excluidas en la regresión de Cox) y obtenemos las importancias asignadas a cada una de las variables por el modelo mediante el método de permutación. Esta métrica nos permite determinar como aumenta el error en la predicción al eliminar la variable.
 
 ```{r}
-# p value atea
+set.seed(173)
+
 names(dataset_survival) <- janitor::make_clean_names(names(dataset_survival), use_make_names = TRUE)
 
-r_fit.all_vars <- ranger(Surv(time = time_monitored, event = vital_status) ~  age + gender + bmi + alcohol_consumption + years_high_alcohol_quantity_consumed + tobacco_smoking_history + number_of_pack_years_smoked + tumor_site + tumor_size_in_cm + height_in_cm + weight_in_kg, data = dataset_survival,
+r_fit.all_vars <- ranger(Surv(time = time_monitored, event = vital_status_at_12months_follow_up) ~ age + gender + alcohol_consumption + bmi + tobacco_smoking_history + number_of_pack_years_smoked + height_in_cm + tumor_size_in_cm + tumor_dist_y + tumor_compactness + tumor_std + tumor_kur + tumor_smoothness + tumor_glcm_asm + edema_kur + edema_glcm_correlation + edema_glcm_asm, data = dataset_survival,
                          num.trees = 525,
                          importance = "permutation",
                          splitrule = "extratrees",
                          num.random.splits = 20,
                          scale.permutation.importance = TRUE,
-                         verbose = TRUE)
+                         verbose = TRUE,
+                         seed = 5)
 
 surv_prob <- data.frame(r_fit.all_vars$survival)
 avg_prob_allvars <- sapply(surv_prob, mean)
@@ -546,24 +605,24 @@ ggplot(df, aes(x = Time, y = Survival, color = Model)) + geom_line() + ylim(0, 1
 var_imp <- data.frame(sort(round(r_fit.all_vars$variable.importance, 4), decreasing = TRUE))
 names(var_imp) <- "importance"
 var_imp
-
-# Calcular el p-value para ver si las variables son representativas o no para el modelo
-importance_pvalues(r_fit.all_vars, method = "altmann", data = dataset_survival, formula = Surv(time = time_monitored, event = vital_status) ~  age + gender + bmi + alcohol_consumption + years_high_alcohol_quantity_consumed + tobacco_smoking_history + number_of_pack_years_smoked + tumor_site + tumor_size_in_cm)
 ```
 
-Con las variables de más importancia, es decir, aquellas que introducen un mayor error en la predicción en caso de eliminarse y que tienen un valor p < 0.05, se crea un nuevo modelo de supervivencia.
+Con las variables de más importancia, es decir, aquellas que introducen un mayor error en la predicción en caso de eliminarse, se crea un nuevo modelo de supervivencia.
 
 ```{r}
+set.seed(173)
+
 # Variables a tener en cuenta en el siguiente modelo
 var_imp <- sort(r_fit.all_vars$variable.importance, decreasing = TRUE)
 which(var_imp > 0, arr.ind = TRUE)
-r_fit.selec_vars <- ranger(Surv(time = time_monitored, event = vital_status) ~  age + tobacco_smoking_history + alcohol_consumption, data = dataset_survival,
+r_fit.selec_vars <- ranger(Surv(time = time_monitored, event = vital_status_at_12months_follow_up) ~  gender + tumor_size_in_cm + tobacco_smoking_history + height_in_cm + edema_glcm_correlation + tumor_glcm_asm + bmi + tumor_dist_y + tumor_smoothness + tumor_kur, data = dataset_survival,
                            num.trees = 525,
                            importance = "permutation",
                            splitrule = "extratrees",
                            num.random.splits = 20,
                            scale.permutation.importance = TRUE,
-                           verbose = TRUE)
+                           verbose = TRUE,
+                           seed = 5)
 
 surv_prob <- data.frame(r_fit.selec_vars$survival)
 avg_prob_selecvars <- sapply(surv_prob, mean)
@@ -577,11 +636,8 @@ ggplot(df, aes(x = Time, y = Survival, color = Model)) + geom_line() + ylim(0, 1
 var_imp <- data.frame(sort(round(r_fit.selec_vars$variable.importance, 4), decreasing = TRUE))
 names(var_imp) <- "importance"
 var_imp
-
-# Calcular el p-value para ver si las variables son representativas o no para el modelo
-importance_pvalues(r_fit.selec_vars, method = "altmann", data = dataset_survival, formula = Surv(time = time_monitored, event = vital_status) ~  age + gender + tobacco_smoking_history + alcohol_consumption + tumor_size_in_cm)
 ```
-En el nuevo modelo se observa que la variable del historial de consumo de tabaco del paciente ha dejado de ser relevante, por lo que se puede concluir que las variables más determinantes a la hora de predecir la supervivencia del paciente son el consumo de alcohol y la edad.
+En el nuevo modelo se observa que las variables de distancia entre centroides en el eje Y del tumor (tumor_dist_y) y la medida BMI (bmi) han dejado de ser relevantes, por lo que se puede concluir que las variables más determinantes a la hora de predecir la supervivencia del paciente son el historial de fumador de tabaco, el género, la altura del paciente, el tamaño del tumor en cm, la kurtosis del tumor, la correlación de la matriz de coocurrencia del edema, la suavidad del tumor y la métrica ASM de la matriz de coocurrencia del tumor.
 
 ## COMPARACIÓN DE LAS CURVAS
 
@@ -591,7 +647,7 @@ Se comparan los 4 modelos obtenidos empleando la regresión de Cox y el algoritm
 concordance_vals <- c((cox.model.all_vars[["concordance"]][["concordance"]]), (cox.model.select_vars[["concordance"]][["concordance"]]), (1 - r_fit.all_vars$prediction.error), (1 - r_fit.selec_vars$prediction.error))
 names(concordance_vals) <- c("COX_ALL", "COX_SELECT", "RF_ALL", "RF_SELECT")
 
-concordance_vals
+print(concordance_vals)
 
 rf_i <- rep("RF", length(r_fit.all_vars$unique.death.times))
 rf_df <- data.frame(r_fit.all_vars$unique.death.times, avg_prob_allvars, rf_i)
@@ -610,12 +666,23 @@ cox_select_df <- data.frame(cox.model.select_vars.fit$time, cox.model.select_var
 names(cox_select_df) <- c("Time","Survival","Model")
 
 models_data_list <- rbind(rf_df, rf_selec_df, cox_df, cox_select_df)
-df <- data.frame(DAY = round(cox.model.all_vars.fit$time[c((1:10)*14)], digits = 2), COX = round(cox.model.all_vars.fit$surv[c((1:10)*14)], digits = 2), COX_SLCT = round(cox.model.select_vars.fit$surv[c((1:10)*14)], digits = 2), RF = round(avg_prob_allvars[c((1:10)*14)], digits = 2), RF_SLCT = round(avg_prob_selecvars[c((1:10)*14)], digits = 2))
-df_t <- transpose(df)
+df <- data.frame(DAY = round(cox.model.all_vars.fit$time[c((1:9)*2, 24)], digits = 2), COX = round(cox.model.all_vars.fit$surv[c((1:9)*2, 24)], digits = 2), COX_SLCT = round(cox.model.select_vars.fit$surv[c((1:9)*2, 24)], digits = 2), RF = round(avg_prob_allvars[c((1:9)*2, 24)], digits = 2), RF_SLCT = round(avg_prob_selecvars[c((1:9)*2, 24)], digits = 2))
+df_t <- data.table::transpose(df)
 rownames(df_t) <- colnames(df)
 df <- df_t
-df.table <- tibble(x = 450, y = 1, tb = list(df))
+df.table <- tibble(x = 10, y = 0.2, tb = list(df))
 
 ggplot(models_data_list, aes(x = Time, y = Survival, color = Model)) + geom_line() + ylim(0, 1) + xlim(0,  max(dataset_survival$time_monitored)) + geom_hline(yintercept = 0.5, linetype="dashed", color = "black") + geom_table(data = df.table, aes(x, y, label = list(df)), table.rownames = TRUE, table.colnames = FALSE, table.theme = ttheme_gtlight)
 ```
-Para la evaluación de los modelos, todos devuelven el índice de concordancia o el c-index. De todos los modelos creados, el de Cox tiene el valor más alto, siendo este modelo el mejor en lo que respecta a las predicciones.
+Para la evaluación de los modelos, todos devuelven el índice de concordancia o el c-index. De todos los modelos creados, el de Cox con todas las variables tiene el valor más alto, siendo este modelo el mejor en lo que respecta a las predicciones.
+
+## Guardar el dataset creado
+
+Se va a guardar el dataset creado para la posterior creación de modelos.
+
+```{r store datasets}
+dataset_images_12month_features_completed <- droplevels(dataset_images_12month_features_completed)
+
+save(dataset_images_12month_features_completed, file = 'dataset_images_12month_features_completed.Rda')
+
+```

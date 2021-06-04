@@ -165,8 +165,8 @@ def segment_tumors(mri_slice_preprocessed, display):
 
     #if display:
      #   img_utils.display_seg_results(currentSlice, slice_subs, 
-      #                              binary_slice, tumor_mask, 
-       #                             tumor_mask_final, segmented_tumor)
+      #      binary_slice, tumor_mask, 
+       #     tumor_mask_final, segmented_tumor)
 
     return segmented_tumor, tumor_mask_final
 

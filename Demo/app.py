@@ -178,7 +178,7 @@ if not os.path.exists(dataset_segmentation):
                         raw_slices[s][mri_type] = dicom_handler.extract_raw_img_array(
                             mri_slices_dicom[s][mri_type])
 
-                        if mri_type == 't1c' or mri_type == 't1':
+                        if mri_type == 'AX T1C' or mri_type == 't1':
                             mri_slices_tumor_segmented[s][mri_type], mri_slices_tumor_masks[s][mri_type], mri_slices_tumor_masks_validated[s][mri_type] = seg.get_tumor_segmentation(
                                 raw_slices[s][mri_type], False)
 
