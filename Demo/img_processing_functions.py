@@ -18,11 +18,6 @@ from scipy import ndimage
 from scipy.signal import find_peaks
 
 
-# Skull stripping algorithm implementation for 3D brain MRI based in McStrip algorithm
-def __check_slice_connectivity(mask_slices):
-    pass
-
-
 def __get_brain_coarse_mask(raw_slices):
     coarse_masks = []
     # Thresholding with Otsu's method
