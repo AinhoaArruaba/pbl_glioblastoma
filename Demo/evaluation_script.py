@@ -153,9 +153,6 @@ if __name__ == "__main__":
             subject_path, mask=True)
         subject_ids.append(subject_id)
 
-    mri_slices_stand = img_func.mri_standarization(
-        subject_img, subject_ids, 'landmarks.txt', False)
-
     subject_brainmasks_mcstrip = {}
     subject_masked_slices = {}
     for s in subject_ids:
