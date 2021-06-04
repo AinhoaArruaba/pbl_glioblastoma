@@ -146,23 +146,26 @@ if __name__ == "__main__":
         subject_id = os.path.basename(subject_path)
         # Read brain volume
         subject_img[subject_id] = {}
-        subject_img[subject_id]['t1'] = load_subject_data(subject_path)
+        subject_img[subject_id]['AX T1C'] = load_subject_data(subject_path)
         # Read brain mask
         subject_brainmask_ground_truth[subject_id] = {}
-        subject_brainmask_ground_truth[subject_id]['t1'] = load_subject_data(
+        subject_brainmask_ground_truth[subject_id]['AX T1C'] = load_subject_data(
             subject_path, mask=True)
         subject_ids.append(subject_id)
+
+    mri_slices_stand = img_func.mri_standarization(
+        subject_img, subject_ids, 'landmarks.txt', False)
 
     subject_brainmasks_mcstrip = {}
     subject_masked_slices = {}
     for s in subject_ids:
-        print(subject_id)
+        print(s)
         # Compute brain mask with McStrip algorithm
         subject_brainmasks_mcstrip[s],  subject_masked_slices = img_func.image_skull_strip(
-            subject_img[s]['t1'], False)
-        img_utils.plot_stack(subject_id, subject_masked_slices)
+            subject_img[s]['AX T1C'], False)
+        # img_utils.plot_stack(s, subject_masked_slices)
         metrics.append(calc_metrics(
-            s, subject_brainmasks_mcstrip[s], subject_brainmask_ground_truth[s]['t1']))
+            s, subject_brainmasks_mcstrip[s], subject_brainmask_ground_truth[s]['AX T1C']))
 
     save_metrics_excel(metrics, xlsx_path)
     # print(metrics)
