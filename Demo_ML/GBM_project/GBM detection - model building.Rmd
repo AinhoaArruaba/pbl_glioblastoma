@@ -3,12 +3,7 @@ title: "Creación de modelos para Glioblastoma"
 output: html_notebook
 ---
 
-Este documento explica el proceso de creación de un modelo basado en Machine Learning (ML) para predecir el estado vital del paciente (vivo/muerto) a los 12 meses para pacientes con Glioblastoma (GBM). Esto se realiza basándose en metadatos de los pacientes y características extraídas de imágenes MRI.
-
-## Cargar datos y librerías
-Se cargan los datos y se dividen en datasets de entrenamiento (train) y validación (test).
-
-```{r load data}
+```{r}
 library(mlbench)
 library(caret)
 library(corrplot)
@@ -16,9 +11,18 @@ library(e1071)
 library(MLmetrics)
 library(smotefamily)
 library(openxlsx)
+library(cvms)
+```
 
+Este documento explica el proceso de creación de un modelo basado en Machine Learning (ML) para predecir el estado vital del paciente (vivo/muerto) a los 12 meses para pacientes con Glioblastoma (GBM). Esto se realiza basándose en metadatos de los pacientes y características extraídas de imágenes MRI.
+
+## Cargar datos y librerías
+Se cargan los datos y se dividen en datasets de entrenamiento (train) y validación (test). Los datos cargados se corresponden al dataset empleado para la estimación de la curva de supervivencia, por lo que el proceso de EDA y parte del pre-procesamiento ya ha sido llevado a cabo previamente.
+
+```{r load data}
 load(file = 'dataset_images_12month_features_completed.Rda')
 gbm_dataset <- dataset_images_12month_features_completed
+gbm_dataset <- gbm_dataset[, -which(names(gbm_dataset) == 'time_monitored', arr.ind = TRUE)]
 
 # Dividir los datos
 set.seed(7)
@@ -57,6 +61,13 @@ gbm_dataset_v <- gbm_dataset_v[, -c(life_expectancy_index, tumor_mri_type_index,
 ```
 
 ## Dataset preprocessing
+
+Para la creación de los modelos de predicción se ha decidido crear 3 vistas distintas, las cuales se describen a continuación.
+
+* Dataset con PCA aplicado para la reducción de la dimensionalidad.
+* Dataset tal y como se ha aplicado para la creación de la curva de supervivencia.
+* Dataset solo con las variables que se han determinado como factores de riesgo en el análisis de la curva de supervivencia.
+
 Se aplicará PCA al dataset de entrenamiento en primer lugar.
 
 ```{r}
@@ -81,100 +92,211 @@ gbm_dataset_PCA <- pr.out.train$x[,1:preprocessParams$numComp]
 gbm_dataset_PCA <- as.data.frame(cbind(gbm_dataset_PCA, gbm_dataset[,non_numeric_vars_index]))
 ```
 
+También se crea una tercera vista del dataset con los factores de riesgo identificados.
+
+```{r Creación del dataset de los factores de riesgo}
+risk_factors <- c("alcohol_consumption", "age", "bmi", "tobacco_smoking_history", "tumor_Hu_3", "edema_glcm_correlation", "tumor_size_in_cm", "height_in_cm", "tumor_ent", "tumor_Hu_2", "tumor_Hu_6", "gender", "tumor_glcm_contrast", "tumor_smoothness")
+
+risk_factor_indexes <- c()
+for (i in 1:length(risk_factors)){
+  risk_factor_indexes[i] = which(colnames(gbm_dataset) == risk_factors[i], arr.ind = TRUE)
+}
+
+gbm_dataset_risk <- gbm_dataset[,risk_factor_indexes]
+gbm_dataset_risk$vital_status_at_12months_follow_up <- gbm_dataset$vital_status_at_12months_follow_up
+```
+
+
 ## Creación de modelos
-Se han creado 4 modelos distitnos empleando distintos algoritmos (SVM, KNN, Random Forest y Boosting). Se ha aplicado la técnica "repeatedcv" para tener más datos para evaluar los algoritmos y compararlos.
+
+Para cada una de las vistas definida se han creado 5 modelos distintos empleando 5 algoritmos (SVM, KNN, Random Forest, Boosting y Regresión Logística). Se ha aplicado la técnica "repeatedcv" para tener más datos para evaluar los algoritmos y así poder realizar una comparación más completa. Todos los algoritmos, menos el de Regresión Logística, han sido modificados para que los parámetros que emplee no sean únicamente los definidos por defecto.
+
 
 ```{r Creación de modelo PCA, warning = FALSE}
 control <- trainControl(method="repeatedcv", number = 5, repeats = 3, classProbs = TRUE, summaryFunction = multiClassSummary)
 
+grid <- expand.grid(sigma = c(1:8) * 0.03194379, C = c(1:10)*0.25)
 set.seed(7)
-fit.svm.PCA <- train(vital_status_at_12months_follow_up~., data=gbm_dataset_PCA, method="svmRadial", metric="ROC", trControl=control)
+fit.svm.PCA <- train(vital_status_at_12months_follow_up~., data=gbm_dataset_PCA, method="svmRadial", metric="ROC", trControl=control, tuneGrid = grid)
 print('Algoritmo SVM con el dataset PCA')
 print(fit.svm.PCA)
 
+grid <- expand.grid(k = c(2:7)*2 - 1)
 set.seed(7)
-fit.knn.PCA <- train(vital_status_at_12months_follow_up~., data=gbm_dataset_PCA, method="knn", metric="ROC", trControl=control)
+fit.knn.PCA <- train(vital_status_at_12months_follow_up~., data=gbm_dataset_PCA, method="knn", metric="ROC", trControl=control, tuneGrid = grid)
 print('Algoritmo KNN con el dataset PCA')
 print(fit.knn.PCA)
 
+grid <- expand.grid(mtry = c(2, 11, 20, c(1:7)*10))
 set.seed(7)
-fit.rf.PCA <- train(vital_status_at_12months_follow_up~., data=gbm_dataset_PCA, method="rf", metric="ROC", trControl=control)
+fit.rf.PCA <- train(vital_status_at_12months_follow_up~., data=gbm_dataset_PCA, method="rf", metric="ROC", trControl=control, tuneGrid = grid)
 print('Algoritmo random forest con el dataset PCA')
 print(fit.rf.PCA)
 
-set.seed(7)
-grid <- expand.grid(nrounds = c(1, 200), max_depth = 6,
+grid <- expand.grid(nrounds = c(1, 200, 400), max_depth = c(2:10),
                     eta = 0.3, gamma = 0,
                     colsample_bytree = 1, min_child_weight = 1,
                     subsample = 1)
+set.seed(7)
 fit.boost.PCA <- train(vital_status_at_12months_follow_up~., data=gbm_dataset_PCA, method="xgbTree", metric="ROC", trControl=control, tuneGrid = grid)
 print('Algoritmo de boosting con el dataset PCA')
 print(fit.boost.PCA)
 
+set.seed(7)
+fit.logreg.PCA <- train(vital_status_at_12months_follow_up~., data=gbm_dataset_PCA, method="LMT", metric="ROC", trControl=control)
+print('Algoritmo de regresión logística con el dataset PCA')
+print(fit.logreg.PCA)
+
 ```
 
-## Model comparation
+```{r Creación de modelo sin PCA, warning = FALSE}
+control <- trainControl(method="repeatedcv", number = 5, repeats = 3, classProbs = TRUE, summaryFunction = multiClassSummary)
 
-The obtained metrics to evaluate the models contain some NA and NAN values which can not be used for t-value testing, so first all the metrics that contain these values are removed from the results not to have any error in future executions.
-From all the available metrics, Accuracy and LogLoss have been selected in order to evaluate the capacity of the models to predict all the class levels and to see how the metric is penalized in the LogLoss.
+grid <- expand.grid(sigma = c(1:8) * 0.02529123, C = c(1:10)*0.25)
+set.seed(7)
+fit.svm <- train(vital_status_at_12months_follow_up~., data=gbm_dataset, method="svmRadial", metric="ROC", trControl=control, tuneGrid = grid)
+print('Algoritmo SVM con el dataset sin variables correlacionadas')
+print(fit.svm)
+
+grid <- expand.grid(k = c(2:7)*2 - 1)
+set.seed(7)
+fit.knn <- train(vital_status_at_12months_follow_up~., data=gbm_dataset, method="knn", metric="ROC", trControl=control, tuneGrid = grid)
+print('Algoritmo KNN con el dataset sin variables correlacionadas')
+print(fit.knn)
+
+grid <- expand.grid(mtry = c(2, 17, 33, c(1:7)*10))
+set.seed(7)
+fit.rf <- train(vital_status_at_12months_follow_up~., data=gbm_dataset, method="rf", metric="ROC", trControl=control, tuneGrid = grid)
+print('Algoritmo random forest con el dataset sin variables correlacionadas')
+print(fit.rf)
+
+
+grid <- expand.grid(nrounds = c(1, 200, 400), max_depth = c(2:10),
+                    eta = 0.3, gamma = 0,
+                    colsample_bytree = 1, min_child_weight = 1,
+                    subsample = 1)
+set.seed(7)
+fit.boost <- train(vital_status_at_12months_follow_up~., data=gbm_dataset, method="xgbTree", metric="ROC", trControl=control, tuneGrid = grid)
+print('Algoritmo de boosting con el dataset sin variables correlacionadas')
+print(fit.boost)
+
+set.seed(7)
+fit.logreg <- train(vital_status_at_12months_follow_up~., data=gbm_dataset, method="LMT", metric="ROC", trControl=control)
+print('Algoritmo de regresión logística con el dataset sin variables correlacionadas')
+print(fit.logreg)
+```
+
+```{r Creación de modelo factores de riesgo, warning = FALSE}
+control <- trainControl(method="repeatedcv", number = 5, repeats = 3, classProbs = TRUE, summaryFunction = multiClassSummary)
+
+grid <- expand.grid(sigma = c(1:8) * 0.04736772, C = c(1:10)*0.25)
+set.seed(7)
+fit.svm.risk <- train(vital_status_at_12months_follow_up~., data=gbm_dataset_risk, method="svmRadial", metric="ROC", trControl=control, tuneGrid = grid)
+print('Algoritmo SVM con el dataset de los factores de riesgo')
+print(fit.svm.risk)
+
+grid <- expand.grid(k = c(2:7)*2 - 1)
+set.seed(7)
+fit.knn.risk <- train(vital_status_at_12months_follow_up~., data=gbm_dataset_risk, method="knn", metric="ROC", trControl=control, tuneGrid = grid)
+print('Algoritmo KNN con el dataset de los factores de riesgo')
+print(fit.knn.risk)
+
+grid <- expand.grid(mtry = c(2, 10, 18, c(1:7)*10))
+set.seed(7)
+fit.rf.risk <- train(vital_status_at_12months_follow_up~., data=gbm_dataset_risk, method="rf", metric="ROC", trControl=control, tuneGrid = grid)
+print('Algoritmo random forest con el dataset de los factores de riesgo')
+print(fit.rf.risk)
+
+grid <- expand.grid(nrounds = c(1, 200, 400), max_depth = c(2:10),
+                    eta = 0.3, gamma = 0,
+                    colsample_bytree = 1, min_child_weight = 1,
+                    subsample = 1)
+set.seed(7)
+fit.boost.risk <- train(vital_status_at_12months_follow_up~., data=gbm_dataset_risk, method="xgbTree", metric="ROC", trControl=control, tuneGrid = grid)
+print('Algoritmo de boosting con el dataset de los factores de riesgo')
+print(fit.boost.risk)
+
+set.seed(7)
+fit.logreg.risk <- train(vital_status_at_12months_follow_up~., data=gbm_dataset_risk, method="LMT", metric="ROC", trControl=control)
+print('Algoritmo de regresión logística con el dataset de los factores de riesgo')
+print(fit.logreg.risk)
+```
+
+## Comparación de los modelos
+
+De todas las métricas disponibles se han seleccionado Accuracy y LogLoss para evaluar la capacidad del modelo para predecir ambos niveles de la variable de clase y obvservar como la métrica es penalizada en el valor del LogLoss.
+
 ```{r model comparation}
-results <- resamples(list(SVM_PCA=fit.svm.PCA, KNN_PCA=fit.knn.PCA, RF_PCA=fit.rf.PCA, BOOST_PCA=fit.boost.PCA,
-                          SVM_NOCOR=fit.svm.nocor, KNN_NOCOR=fit.knn.nocor, RF_NOCOR=fit.rf.nocor, BOOST_NOCOR=fit.boost.nocor,
-                          SVM_VARIMP=fit.svm.var_imp, KNN_VARIMP=fit.knn.var_imp, RF_VARIMP=fit.rf.var_imp, BOOST_VARIMP=fit.boost.var_imp,
-                          SVM_PCA_SMOTE=fit.svm.PCA_smote, KNN_PCA_SMOTE=fit.knn.PCA_smote, RF_PCA_SMOTE=fit.rf.PCA_smote, BOOST_PCA_SMOTE=fit.boost.PCA_smote))
+results <- resamples(list(SVM_PCA=fit.svm.PCA, KNN_PCA=fit.knn.PCA, RF_PCA=fit.rf.PCA, BOOST_PCA=fit.boost.PCA, LMT_PCA=fit.logreg.PCA,
+                          SVM_NOCOR=fit.svm, KNN_NOCOR=fit.knn, RF_NOCOR=fit.rf, BOOST_NOCOR=fit.boost, LMT_NOCOR=fit.logreg,
+                          SVM_RISK=fit.svm.risk, KNN_RISK=fit.knn.risk, RF_RISK=fit.rf.risk, BOOST_RISK=fit.boost.risk, LMT_RISK=fit.logreg.risk))
+ind_na_col <- c(which(names(results$values) == "SVM_PCA~F1", arr.ind = TRUE),
+                which(names(results$values) == "KNN_PCA~F1", arr.ind = TRUE),
+                which(names(results$values) == "RF_PCA~F1", arr.ind = TRUE),
+                which(names(results$values) == "BOOST_PCA~F1", arr.ind = TRUE),
+                which(names(results$values) == "LMT_PCA~F1", arr.ind = TRUE),
+                which(names(results$values) == "SVM_PCA~Neg_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "KNN_PCA~Neg_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "RF_PCA~Neg_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "BOOST_PCA~Neg_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "LMT_PCA~Neg_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "SVM_PCA~Pos_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "KNN_PCA~Pos_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "RF_PCA~Pos_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "BOOST_PCA~Pos_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "LMT_PCA~Pos_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "SVM_PCA~Precision", arr.ind = TRUE),
+                which(names(results$values) == "KNN_PCA~Precision", arr.ind = TRUE),
+                which(names(results$values) == "RF_PCA~Precision", arr.ind = TRUE),
+                which(names(results$values) == "BOOST_PCA~Precision", arr.ind = TRUE),
+                which(names(results$values) == "LMT_PCA~Precision", arr.ind = TRUE),
+                
+                which(names(results$values) == "SVM_NOCOR~F1", arr.ind = TRUE),
+                which(names(results$values) == "KNN_NOCOR~F1", arr.ind = TRUE),
+                which(names(results$values) == "RF_NOCOR~F1", arr.ind = TRUE),
+                which(names(results$values) == "BOOST_NOCOR~F1", arr.ind = TRUE),
+                which(names(results$values) == "LMT_NOCOR~F1", arr.ind = TRUE),
+                which(names(results$values) == "SVM_NOCOR~Neg_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "KNN_NOCOR~Neg_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "RF_NOCOR~Neg_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "BOOST_NOCOR~Neg_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "LMT_NOCOR~Neg_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "SVM_NOCOR~Pos_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "KNN_NOCOR~Pos_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "RF_NOCOR~Pos_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "BOOST_NOCOR~Pos_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "LMT_NOCOR~Pos_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "SVM_NOCOR~Precision", arr.ind = TRUE),
+                which(names(results$values) == "KNN_NOCOR~Precision", arr.ind = TRUE),
+                which(names(results$values) == "RF_NOCOR~Precision", arr.ind = TRUE),
+                which(names(results$values) == "BOOST_NOCOR~Precision", arr.ind = TRUE),
+                which(names(results$values) == "LMT_NOCOR~Precision", arr.ind = TRUE),
+                
+                which(names(results$values) == "SVM_RISK~F1", arr.ind = TRUE),
+                which(names(results$values) == "KNN_RISK~F1", arr.ind = TRUE),
+                which(names(results$values) == "RF_RISK~F1", arr.ind = TRUE),
+                which(names(results$values) == "BOOST_RISK~F1", arr.ind = TRUE),
+                which(names(results$values) == "LMT_RISK~F1", arr.ind = TRUE),
+                which(names(results$values) == "SVM_RISK~Neg_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "KNN_RISK~Neg_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "RF_RISK~Neg_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "BOOST_RISK~Neg_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "LMT_RISK~Neg_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "SVM_RISK~Pos_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "KNN_RISK~Pos_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "RF_RISK~Pos_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "BOOST_RISK~Pos_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "LMT_RISK~Pos_Pred_Value", arr.ind = TRUE),
+                which(names(results$values) == "SVM_RISK~Precision", arr.ind = TRUE),
+                which(names(results$values) == "KNN_RISK~Precision", arr.ind = TRUE),
+                which(names(results$values) == "RF_RISK~Precision", arr.ind = TRUE),
+                which(names(results$values) == "BOOST_RISK~Precision", arr.ind = TRUE),
+                which(names(results$values) == "LMT_RISK~Precision", arr.ind = TRUE))
 
-ind_na_col <- c(which(names(results$values) == "SVM_PCA~Mean_F1", arr.ind = TRUE),
-                which(names(results$values) == "KNN_PCA~Mean_F1", arr.ind = TRUE),
-                which(names(results$values) == "RF_PCA~Mean_F1", arr.ind = TRUE),
-                which(names(results$values) == "BOOST_PCA~Mean_F1", arr.ind = TRUE),
-                which(names(results$values) == "SVM_PCA~Mean_Pos_Pred_Value", arr.ind = TRUE),
-                which(names(results$values) == "KNN_PCA~Mean_Pos_Pred_Value", arr.ind = TRUE),
-                which(names(results$values) == "RF_PCA~Mean_Pos_Pred_Value", arr.ind = TRUE),
-                which(names(results$values) == "BOOST_PCA~Mean_Pos_Pred_Value", arr.ind = TRUE),
-                which(names(results$values) == "SVM_PCA~Mean_Precision", arr.ind = TRUE),
-                which(names(results$values) == "KNN_PCA~Mean_Precision", arr.ind = TRUE),
-                which(names(results$values) == "RF_PCA~Mean_Precision", arr.ind = TRUE),
-                which(names(results$values) == "BOOST_PCA~Mean_Precision", arr.ind = TRUE),
-                which(names(results$values) == "SVM_NOCOR~Mean_F1", arr.ind = TRUE),
-                which(names(results$values) == "KNN_NOCOR~Mean_F1", arr.ind = TRUE),
-                which(names(results$values) == "RF_NOCOR~Mean_F1", arr.ind = TRUE),
-                which(names(results$values) == "BOOST_NOCOR~Mean_F1", arr.ind = TRUE),
-                which(names(results$values) == "SVM_NOCOR~Mean_Pos_Pred_Value", arr.ind = TRUE),
-                which(names(results$values) == "KNN_NOCOR~Mean_Pos_Pred_Value", arr.ind = TRUE),
-                which(names(results$values) == "RF_NOCOR~Mean_Pos_Pred_Value", arr.ind = TRUE),
-                which(names(results$values) == "BOOST_NOCOR~Mean_Pos_Pred_Value", arr.ind = TRUE),
-                which(names(results$values) == "SVM_NOCOR~Mean_Precision", arr.ind = TRUE),
-                which(names(results$values) == "KNN_NOCOR~Mean_Precision", arr.ind = TRUE),
-                which(names(results$values) == "RF_NOCOR~Mean_Precision", arr.ind = TRUE),
-                which(names(results$values) == "BOOST_NOCOR~Mean_Precision", arr.ind = TRUE),
-                which(names(results$values) == "SVM_VARIMP~Mean_F1", arr.ind = TRUE),
-                which(names(results$values) == "KNN_VARIMP~Mean_F1", arr.ind = TRUE),
-                which(names(results$values) == "RF_VARIMP~Mean_F1", arr.ind = TRUE),
-                which(names(results$values) == "BOOST_VARIMP~Mean_F1", arr.ind = TRUE),
-                which(names(results$values) == "SVM_VARIMP~Mean_Pos_Pred_Value", arr.ind = TRUE),
-                which(names(results$values) == "KNN_VARIMP~Mean_Pos_Pred_Value", arr.ind = TRUE),
-                which(names(results$values) == "RF_VARIMP~Mean_Pos_Pred_Value", arr.ind = TRUE),
-                which(names(results$values) == "BOOST_VARIMP~Mean_Pos_Pred_Value", arr.ind = TRUE),
-                which(names(results$values) == "SVM_VARIMP~Mean_Precision", arr.ind = TRUE),
-                which(names(results$values) == "KNN_VARIMP~Mean_Precision", arr.ind = TRUE),
-                which(names(results$values) == "RF_VARIMP~Mean_Precision", arr.ind = TRUE),
-                which(names(results$values) == "BOOST_VARIMP~Mean_Precision", arr.ind = TRUE),
-                which(names(results$values) == "SVM_PCA_SMOTE~Mean_F1", arr.ind = TRUE),
-                which(names(results$values) == "KNN_PCA_SMOTE~Mean_F1", arr.ind = TRUE),
-                which(names(results$values) == "RF_PCA_SMOTE~Mean_F1", arr.ind = TRUE),
-                which(names(results$values) == "BOOST_PCA_SMOTE~Mean_F1", arr.ind = TRUE),
-                which(names(results$values) == "SVM_PCA_SMOTE~Mean_Pos_Pred_Value", arr.ind = TRUE),
-                which(names(results$values) == "KNN_PCA_SMOTE~Mean_Pos_Pred_Value", arr.ind = TRUE),
-                which(names(results$values) == "RF_PCA_SMOTE~Mean_Pos_Pred_Value", arr.ind = TRUE),
-                which(names(results$values) == "BOOST_PCA_SMOTE~Mean_Pos_Pred_Value", arr.ind = TRUE),
-                which(names(results$values) == "SVM_PCA_SMOTE~Mean_Precision", arr.ind = TRUE),
-                which(names(results$values) == "KNN_PCA_SMOTE~Mean_Precision", arr.ind = TRUE),
-                which(names(results$values) == "RF_PCA_SMOTE~Mean_Precision", arr.ind = TRUE),
-                which(names(results$values) == "BOOST_PCA_SMOTE~Mean_Precision", arr.ind = TRUE))
-
-ind_na_col_metrics <- c(which(results$metrics == "Mean_F1", arr.ind = TRUE),
-                        which(results$metrics == "Mean_Pos_Pred_Value", arr.ind = TRUE),
-                        which(results$metrics == "Mean_Precision", arr.ind = TRUE))
+ind_na_col_metrics <- c(which(results$metrics == "F1", arr.ind = TRUE),
+                        which(results$metrics == "Neg_Pred_Value", arr.ind = TRUE),
+                        which(results$metrics == "Pos_Pred_Value", arr.ind = TRUE),
+                        which(results$metrics == "Precision", arr.ind = TRUE))
 results$values <- results$values[, -ind_na_col]
 results$metrics <- results$metrics[-ind_na_col_metrics]
 
@@ -182,77 +304,49 @@ print('Summary of the prediction metrics for PCA dataset')
 summary(results)
 
 scales <- list(x=list(relation="free"), y=list(relation="free"))
-bwplot(results, scales=scales, metric = results$metrics[1])
-bwplot(results, scales=scales, metric = results$metrics[4])
+bwplot(results, scales=scales, metric = results$metrics[1], xlim = c(0, 1))
+bwplot(results, scales=scales, metric = results$metrics[6], xlim = c(0, 2.1))
 
 diffs <- diff(results)
 print('P-value test of the prediction metrics for PCA dataset')
+summary_diffs <- summary(diffs)
 print(summary_diffs$table$Accuracy)
 print(summary_diffs$table$logLoss)
 ```
-The metrics have been extracted to excel files to evaluate them better because of the size of the generated matrix.
+Las métricas han sido extraidas a archivos excel para su mejor interpretación debido a la dificultad de comprensión al mostrar grandes matrices.
 ```{r p-test tables}
-summary_diffs <- summary(diffs)
 write.xlsx(summary_diffs$table$Accuracy, "p-val_accu.xlsx", sheetName = "ACCURACY")
 write.xlsx(summary_diffs$table$logLoss, "p-val_logloss.xlsx", sheetName = "LOGLOSS")
 ```
 
-With the p-values selected and having into account the results of the two metrics, the models trained with the SMOTE applied perform better in regards of Accuracy, but a litte bit worse in terms of LogLoss.
+Con los valores del p-value calculados y teniendo en cuenta los resultados de las dos métricas, se han obtenido las siguientes conclusiones.
 
-* So from all the models trained with SMOTE applied in terms of Accuracy SVM is the better performing and the one trained with the Boosting or RandomForest algorithm better in LogLoss.
-* From the models trained with the dataset where the variables have been selected with variable importance, the boosting algorithm in regards of LogLoss and the SVM performs better in Accuracy.
-* From the models trained with the dataset where the correlated variables have been deleted, the RandomForest algorithm in regards of LogLoss and the SVM performs better in Accuracy.
-* From the models trained with the dataset where PCA has been applied, the boosting algorithm in regards of LogLoss and the SVM performs better in Accuracy.
+* De todos los modelos creados con el dataset en dónde PCA ha sido aplicado, Boosting ha sido el mejor en lo que respecta a Accuracy y a LogLoss. El algoritmo de Regresión Logistica es el que peor rendimiento tiene en lo que corresponde a LogLoss, siendo la diferencia con el resto significativa.
 
-In general, in all cases the SVM is the best one in terms of accuracy, being the one trained with the SMOTE model the best performing from the rest and second the PCA. Looking at the LogLoss metric the boosting and Random Forest algorithms are better, being the ones with the SMOTE dataset the best performing, with no significant difference between them.
+* De los modelos creados con las variables no correlacionadas el mejor en lo que respecta al Accuracy han sido RF y SVM, pero los valores del p-value muestran que la diferencia entre ellos es significativa, siendo SVM el mejor de los dos. SVM es también el algoritmo que mejor funciona respecto a la métrica LogLoss.
 
-It can be seen that in terms of model training results SMOTE has helped improving the results, but the created new data points may not represent correctly the imbalanced classes. So just in case, also the SVM and boosting algorithms with the PCA dataset will be implemented.
+* En lo que respecta a los algoritmos en los cuales la base de datos empleada ha sido generada únicamente con los factores de riesgo, KNN y Regresión Logistica son los que mejor rendimiento presentan para la métrica de Accuracy, sin ningún cambio representativo entre ambos modelos, aunque Regresión Logistica es el algoritmo que mayor penalización recibe en la métrica LogLoss.
 
-## Final model creation
+En general, el valor del Accuracy es bastante bajo para todos los casos, siendo el mejor el algoritmo Boosting para la BD al cual se le ha aplicado PCA. A su vez, éste modelo es el que menos es penalizado mediante la métrica LogLoss. El segundo algoritmo mejor posicionado es el SVM para la BD de PCA. De esta forma, se propone el uso de estos dos modelos para la validación. Dado que PCA puede dificultar la interpretación de los resultados, se ha decidido emplear también el modelo entrenado mediante SVM para la BD de las variables no correlacionadas.
 
-Apply preprocessing to the test dataset, as the selected models all use the PCA feature extraction algorithm, PCA is applied to scaled, centered and skeness corrected the data.
+## Modelo final
+
+Se aplica el preprocesamiento al dataset de validación. Se aplica PCA a la BD de validación.
+
 ```{r}
-standarized_params_v <- preProcess(dr_dataset_v[,numeric_vars_index], method=c("center", "scale", "YeoJohnson"))
-dr_dataset_v[,numeric_vars_index] <- predict(standarized_params_v, dr_dataset_v[,numeric_vars_index])
+gbm_dataset_v_PCA <- predict(pr.out.train, newdata = gbm_dataset_v[,numeric_vars_index])
+gbm_dataset_v_PCA <- as.data.frame(gbm_dataset_v_PCA)
 
-pr.out.train <- prcomp(dr_dataset_v[, numeric_vars_index], scale = TRUE)
-preprocessParams <- preProcess(dr_dataset_v[, numeric_vars_index], method=c("pca"))
-dr_dataset_PCA_v <- pr.out.train$x[,1:preprocessParams$numComp]
-dr_dataset_PCA_v <- as.data.frame(cbind(dr_dataset_PCA_v, Subject = dr_dataset_v$Subject,
-                                        Side = dr_dataset_v$Side, Level = dr_dataset_v$Level))
-
-dr_dataset_PCA_v$Level <- as.factor(dr_dataset_PCA_v$Level)
-levels(dr_dataset_PCA_v$Level) <- make.names(c("no_dr", "mild", "moderate", "severe", "proliferative"))
+gbm_dataset_v_PCA <- gbm_dataset_v_PCA[,1:preprocessParams$numComp]
+gbm_dataset_v_PCA <- as.data.frame(cbind(gbm_dataset_v_PCA, gbm_dataset_v[,non_numeric_vars_index]))
 ```
 
-Now the 4 selected models are trained with all the training data available and using only the best parameters obtained.
-```{r}
+Ahora los modelos seleccionados se entrenan con todos los datos de training disponibles y empleando los parámetros del mejor resultado obtenido.
 
+```{r}
 control <- trainControl(method="none", classProbs = TRUE, summaryFunction = multiClassSummary)
 
-# PCA SMOTE Boost
-set.seed(7)
-grid <- expand.grid(nrounds = fit.boost.PCA_smote$bestTune$nrounds,
-                    max_depth = fit.boost.PCA_smote$bestTune$max_depth,
-                    eta = fit.boost.PCA_smote$bestTune$eta,
-                    gamma = fit.boost.PCA_smote$bestTune$gamma,
-                    colsample_bytree = fit.boost.PCA_smote$bestTune$colsample_bytree,
-                    min_child_weight = fit.boost.PCA_smote$bestTune$min_child_weight,
-                    subsample = fit.boost.PCA_smote$bestTune$subsample)
-model.boost.PCA_smote <- train(Level~., data=dr_dataset_PCA_smote$data, method="xgbTree", metric="ROC", trControl=control, tuneGrid = grid)
-
-# PCA SMOTE SVM
-set.seed(7)
-grid <- expand.grid(C = fit.svm.PCA_smote$bestTune$C, sigma = fit.svm.PCA_smote$bestTune$sigma)
-model.svm.PCA_smote <- train(Level~., data=dr_dataset_PCA_smote$data, method="svmRadial", metric="ROC", trControl=control, tuneGrid = grid)
-
-# PCA SVM
-set.seed(7)
-grid <- expand.grid(C = fit.svm.PCA$bestTune$C, sigma = fit.svm.PCA$bestTune$sigma)
-model.svm.PCA <- train(Level~., data=dr_dataset_PCA, method="svmRadial", metric="ROC", trControl=control, tuneGrid = grid)
-
-# PCA Boost
-set.seed(7)
+# PCA BOOST
 grid <- expand.grid(nrounds = fit.boost.PCA$bestTune$nrounds,
                     max_depth = fit.boost.PCA$bestTune$max_depth,
                     eta = fit.boost.PCA$bestTune$eta,
@@ -260,34 +354,47 @@ grid <- expand.grid(nrounds = fit.boost.PCA$bestTune$nrounds,
                     colsample_bytree = fit.boost.PCA$bestTune$colsample_bytree,
                     min_child_weight = fit.boost.PCA$bestTune$min_child_weight,
                     subsample = fit.boost.PCA$bestTune$subsample)
-model.boost.PCA <- train(Level~., data=dr_dataset_PCA, method="xgbTree", metric="ROC", trControl=control, tuneGrid = grid)
+set.seed(7)
+model.boost.PCA <- train(vital_status_at_12months_follow_up~., data=gbm_dataset_PCA, method="xgbTree", metric="Roc", trControl=control, tuneGrid = grid)
+
+# PCA SVM
+grid <- expand.grid(C = fit.svm.PCA$bestTune$C,
+                    sigma = fit.svm.PCA$bestTune$sigma)
+set.seed(7)
+model.svm.PCA <- train(vital_status_at_12months_follow_up~., data=gbm_dataset_PCA, method="svmRadial", metric="Roc", trControl=control, tuneGrid = grid)
+
+# NOCOR SVM
+grid <- expand.grid(C = fit.svm$bestTune$C, sigma = fit.svm$bestTune$sigma)
+set.seed(7)
+model.svm <- train(vital_status_at_12months_follow_up~., data=gbm_dataset, method="svmRadial", metric="ROC", trControl=control, tuneGrid = grid)
+
+
 ```
 
-## Predict with the testing dataset
+## Validación del modelo seleccionado
+
+```{r}
+test_pred <- predict(model.boost.PCA, newdata = gbm_dataset_v_PCA)
+confusionMatrix.Boost.PCA <- confusionMatrix(table(test_pred, gbm_dataset_v_PCA$vital_status_at_12months_follow_up))
+print(confusionMatrix.Boost.PCA)
+plot_confusion_matrix(confusion_matrix(targets = gbm_dataset_v_PCA$vital_status_at_12months_follow_up, predictions = test_pred))
+```
+
+```{r}
+test_pred <- predict(model.svm.PCA, newdata = gbm_dataset_v_PCA)
+confusionMatrix.svm.PCA <- confusionMatrix(table(test_pred, gbm_dataset_v_PCA$vital_status_at_12months_follow_up))
+print(confusionMatrix.svm.PCA)
+plot_confusion_matrix(confusion_matrix(targets = gbm_dataset_v_PCA$vital_status_at_12months_follow_up, predictions = test_pred))
+```
+
 
 
 ```{r}
-test_pred <- predict(model.boost.PCA_smote, newdata = dr_dataset_PCA_v)
-confusionMatrix(table(test_pred, dr_dataset_PCA_v$Level))
+test_pred <- predict(model.svm, newdata = gbm_dataset_v)
+confusionMatrix.svm <- confusionMatrix(table(test_pred, gbm_dataset_v$vital_status_at_12months_follow_up))
+print(confusionMatrix.svm)
+plot_confusion_matrix(confusion_matrix(targets = gbm_dataset_v$vital_status_at_12months_follow_up, predictions = test_pred))
 ```
-
-
-```{r}
-test_pred <- predict(model.svm.PCA_smote, newdata = dr_dataset_PCA_v)
-confusionMatrix(table(test_pred, dr_dataset_PCA_v$Level))
-```
-
-
-```{r}
-test_pred <- predict(model.svm.PCA, newdata = dr_dataset_PCA_v)
-confusionMatrix(table(test_pred, dr_dataset_PCA_v$Level))
-```
-
-```{r}
-test_pred <- predict(model.boost.PCA, newdata = dr_dataset_PCA_v)
-confusionMatrix(table(test_pred, dr_dataset_PCA_v$Level))
-```
-
 
 ## Conclusions
 
