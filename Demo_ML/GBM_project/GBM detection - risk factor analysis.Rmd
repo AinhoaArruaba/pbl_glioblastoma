@@ -46,7 +46,7 @@ cause_of_death_index <- which(names(dataset_risk) == 'cause_of_death', arr.ind =
 vital_status_index <- which(names(dataset_risk) == 'vital_status', arr.ind = TRUE)
 life_expectancy_index <- which(names(dataset_risk) == 'life_expectancy', arr.ind = TRUE)
 
-# Elminar las entradas con más del 70% de las variables con NA
+# Elminar las entradas con más del 30% de las variables con NA
 # Tamaño del dataset antes de eliminar entradas
 dim(dataset_risk)
 dataset_risk <- dataset_risk[which(rowMeans(!is.na(dataset_risk)) > 0.7), ]
