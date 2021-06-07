@@ -224,7 +224,7 @@ print(fit.logreg.risk)
 
 ## Comparación de los modelos
 
-De todas las métricas disponibles se han seleccionado Accuracy y LogLoss para evaluar la capacidad del modelo para predecir ambos niveles de la variable de clase y obvservar como la métrica es penalizada en el valor del LogLoss.
+De todas las métricas disponibles se han seleccionado Accuracy y LogLoss para evaluar la capacidad del modelo para predecir ambos niveles de la variable de clase y obvservar como la métrica es penalizada en el valor del LogLoss. Se eliminan las métricas que contienen algún valor NA.
 
 ```{r model comparation}
 results <- resamples(list(SVM_PCA=fit.svm.PCA, KNN_PCA=fit.knn.PCA, RF_PCA=fit.rf.PCA, BOOST_PCA=fit.boost.PCA, LMT_PCA=fit.logreg.PCA,
@@ -387,8 +387,6 @@ print(confusionMatrix.svm.PCA)
 plot_confusion_matrix(confusion_matrix(targets = gbm_dataset_v_PCA$vital_status_at_12months_follow_up, predictions = test_pred))
 ```
 
-
-
 ```{r}
 test_pred <- predict(model.svm, newdata = gbm_dataset_v)
 confusionMatrix.svm <- confusionMatrix(table(test_pred, gbm_dataset_v$vital_status_at_12months_follow_up))
@@ -396,10 +394,8 @@ print(confusionMatrix.svm)
 plot_confusion_matrix(confusion_matrix(targets = gbm_dataset_v$vital_status_at_12months_follow_up, predictions = test_pred))
 ```
 
-## Conclusions
+## Conclusiones
 
-Looking at the results obtained with the testing dataset, the better performing algorithm and model corresponds to the boosting algorithm trained with the dataset in which SMOTE has been applied to balance the dataset. However, this model is not able to predict correctly the mild and sever classes.
+Observando los resultados obtenidos en la validación de los modelos, el algoritmo que mejor funciona se corresponde al Boosting con el dataset dónde a las variables se les aplica PCA, con un Accuracy de 0.67. Los otros modelos no son capaces de predecir correctamente a los pacientes que han muerto a los 12 meses del diagnóstico.
 
-The only model which is able to predict all clasees (with a very low sensitivity and not so good specificity) is the model generated with the boosting algorithm.
-
-With this we can conclude that the obtained features from the image are not representative enough of that with these we can not obtain a good enough model.
+Con esto podemos concluir que o las características extraidas no son suficientemente representativas o que los pacientes disponibles no son suficientes para entrenar un modelo fiable para la predicción de la supervivencia de los pacientes a 12 meses del diagnóstico.
