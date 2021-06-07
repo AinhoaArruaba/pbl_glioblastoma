@@ -12,7 +12,7 @@ import math
 import feature_extraction as fe
 
 
-def get_tumor_segmentation(mri_slices_preprocessed, display):
+def get_tumor_segmentation(mri_slices_preprocessed, type, display):
     mri_slices_segmented = []
     mri_slices_masks = []
     mri_slices_masks_validated = []
@@ -20,11 +20,13 @@ def get_tumor_segmentation(mri_slices_preprocessed, display):
     for index in enumerate(mri_slices_preprocessed):
         segmented_region, segmented_mask = segment_tumors(
             mri_slices_preprocessed[index[0], :, :], display)
+        segmented_region = segmented_region.astype(np.int16)
+        segmented_mask = segmented_mask.astype(np.int16)
         mri_slices_segmented.append(segmented_region)
         mri_slices_masks.append(segmented_mask)
 
     mri_slices_masks_validated = validate_masks(
-        mri_slices_preprocessed, mri_slices_masks)
+        mri_slices_preprocessed, mri_slices_masks, type)
     mri_slices_segmented = [
         seg*val for seg, val in zip(mri_slices_segmented, mri_slices_masks_validated)]
 
@@ -34,16 +36,17 @@ def get_tumor_segmentation(mri_slices_preprocessed, display):
     return mri_slices_segmented, mri_slices_masks, mri_slices_masks_validated
 
 
-def validate_masks(mri_slices_preprocessed, mri_slices_masks):
-    mri_masks_continuity = np.zeros(len(mri_slices_masks))
-    mri_masks_area = np.zeros(len(mri_slices_masks))
+def validate_masks(mri_slices_preprocessed, mri_slices_masks, type):
+    validated_masks = mri_slices_masks[:]
+    mri_masks_continuity = np.zeros(len(validated_masks))
+    mri_masks_area = np.zeros(len(validated_masks))
     max_slice_area_idx = 0
     slice_area_max = 0
     # Check if the masks are valid
-    for index in enumerate(mri_slices_masks):
-        all_labels = measure.label(mri_slices_masks[index[0]])
+    for index in enumerate(validated_masks):
+        all_labels = measure.label(validated_masks[index[0]])
         regions = measure.regionprops(all_labels)
-        slice_area = fe.compute_slice_area(mri_slices_masks[index[0]])
+        slice_area = fe.compute_slice_area(validated_masks[index[0]])
 
         regions.sort(key=lambda region: region.area, reverse=True)
 
@@ -54,35 +57,45 @@ def validate_masks(mri_slices_preprocessed, mri_slices_masks):
 
         slice_area = sum(reg.area for reg in regions)
 
-        mri_slices_masks[index[0]], slice_area = __check_mask_validity(
-            regions, totalArea, all_labels, mri_slices_masks[index[0]], slice_area)
+        validated_masks[index[0]], slice_area = __check_mask_validity(
+            regions, totalArea, all_labels, validated_masks[index[0]], slice_area, type)
 
         if slice_area > slice_area_max:
             slice_area_max = slice_area
             max_slice_area_idx = index[0]
         mri_masks_area[index[0]] = slice_area
-        mri_slices_masks[index[0]
-                         ] = mri_slices_masks[index[0]].astype(np.int16)
+        validated_masks[index[0]
+                         ] = validated_masks[index[0]].astype(np.int16)
 
     # Compute continuity of the tumor among slices
     cont = 0
-    for mri_slice_mask_cur, mri_slice_mask_next in zip(mri_slices_masks, mri_slices_masks[1:]):
+    for mri_slice_mask_cur, mri_slice_mask_next in zip(validated_masks, validated_masks[1:]):
         mri_masks_continuity[cont] = sum(
             sum(mri_slice_mask_cur*mri_slice_mask_next))
         cont = cont + 1
 
     # Select slices that contain the tumor
-    mri_slices_masks = __select_tumor_slices(mri_masks_continuity,
-                                             mri_slices_masks, max_slice_area_idx, mri_masks_area)
+    validated_masks = __select_tumor_slices(mri_masks_continuity,
+                                             validated_masks, max_slice_area_idx, mri_masks_area)
 
-    return mri_slices_masks
+    return validated_masks
 
 
-def __check_mask_validity(regions, totalArea, all_labels, mri_slice_mask, slice_area):
+def __check_mask_validity(regions, totalArea, all_labels, mri_slice_mask, slice_area, type):
+    if type == 1:
+        compactness_limit = 0.65
+        eccentricity_limit = 0.90
+        totalArea_limit = 0.4
+    else:
+        compactness_limit = 0.75
+        eccentricity_limit = 0.95
+        totalArea_limit = 0.4
+    
     for reg_idx in enumerate(regions):
         compactness = 1 - 4*math.pi * \
             regions[reg_idx[0]].area/(regions[reg_idx[0]].perimeter**2)
-        if compactness > 0.65 or regions[reg_idx[0]].eccentricity > 0.90 or regions[reg_idx[0]].area > totalArea*0.4:
+        if (compactness > compactness_limit or regions[reg_idx[0]].eccentricity > eccentricity_limit 
+            or regions[reg_idx[0]].area > totalArea*totalArea_limit):
             mask = mri_slice_mask
             mask = mask - \
                 np.where(all_labels == regions[reg_idx[0]].label, 1, 0)
@@ -179,17 +192,17 @@ def segment_tumors(mri_slice_preprocessed, display):
 
     segmented_tumor = tumor_mask_final*mri_slice
 
-    # if display:
-    #   img_utils.display_seg_results(currentSlice, slice_subs,
-    #                              binary_slice, tumor_mask,
-    #                             tumor_mask_final, segmented_tumor)
+    if display:
+        img_utils.display_seg_results(currentSlice, slice_subs,
+                                  binary_slice, tumor_mask,
+                                 tumor_mask_final, segmented_tumor)
 
     return segmented_tumor, tumor_mask_final
 
 
 def __keepLargestRegion(currentSlice):
     binary_slice = currentSlice > 0
-    binary_slice = morphology.erosion(binary_slice, morphology.square(2))
+    binary_slice = morphology.erosion(binary_slice, morphology.square(5))
     labels = measure.label(binary_slice)
     regions = measure.regionprops(labels)
     regions.sort(key=lambda region: region.area, reverse=True)
@@ -301,7 +314,7 @@ def __select_regions(regions, regions_meanInt, regions_meanInt_possible):
         possible_centroid = regions[possibleRegions[possibleIdx]].centroid
         euc_dist = np.sqrt((max_centroid[0] - possible_centroid[0])**2 +
                            (max_centroid[1] - possible_centroid[1])**2)
-        if euc_dist < 100:
+        if euc_dist < 75:
             selected_regions = np.append(
                 selected_regions, possibleRegions[possibleIdx])
 
@@ -314,9 +327,6 @@ def __morph_op(tumor_mask):
     tumor_mask = ndimage.binary_fill_holes(tumor_mask)
     tumor_mask = morphology.erosion(tumor_mask, morphology.square(1))
 
-    #tumor_mask = morphology.opening(tumor_mask, morphology.square(5))
-    #tumor_mask = ndimage.binary_fill_holes(tumor_mask)
-
     return tumor_mask
 
 
@@ -324,9 +334,6 @@ def __morph_op_initial_mask(tumor_mask):
     tumor_mask = morphology.dilation(tumor_mask, morphology.square(3))
     tumor_mask = morphology.closing(tumor_mask, morphology.square(3))
     tumor_mask = morphology.erosion(tumor_mask, morphology.square(1))
-
-    #tumor_mask = morphology.opening(tumor_mask, morphology.square(5))
-    #tumor_mask = ndimage.binary_fill_holes(tumor_mask)
 
     return tumor_mask
 
