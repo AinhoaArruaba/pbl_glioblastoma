@@ -196,13 +196,13 @@ def tumor_and_edema_segmentation(dataset_no_skull, dataset_segmentation, dataset
                             print("\tTumor segmentation for MRI type " +
                                   mri_type.upper())
                             mri_slices_tumor_segmented[s][mri_type], mri_slices_tumor_masks[s][mri_type], mri_slices_tumor_masks_validated[s][mri_type] = seg.get_tumor_segmentation(
-                                raw_slices[s][mri_type], False)
+                                raw_slices[s][mri_type], 1, False)
 
                         if 'FLAIR' in mri_type or 'T2' in mri_type:
                             print("\tEdema segmentation for MRI type " +
                                   mri_type.upper())
                             mri_slices_tumor_segmented[s][mri_type], mri_slices_tumor_masks[s][mri_type], mri_slices_tumor_masks_validated[s][mri_type] = seg.get_tumor_segmentation(
-                                raw_slices[s][mri_type], False)
+                                raw_slices[s][mri_type], 0, False)
 
                         subject_folder = os.path.join(
                             dataset_path, s, mri_type)
@@ -258,7 +258,7 @@ def mask_validation(dataset_no_skull, dataset_segmentation_masks, dataset_segmen
             if not os.path.exists(os.path.join(dataset_segmentation, s)):
                 os.mkdir(os.path.join(dataset_segmentation, s))
 
-            for mri_type in os.listdir(os.path.join(dataset_path, s)):
+            for mri_type in os.listdir(os.path.join(masks_path, s)):
                 if mri_type in img_types:
                     if not os.path.exists(os.path.join(dataset_segmentation_masks_validated, s, mri_type)):
                         if not subject_printed:
@@ -274,10 +274,20 @@ def mask_validation(dataset_no_skull, dataset_segmentation_masks, dataset_segmen
                         raw_slices_masks[s][mri_type] = dicom_handler.extract_raw_img_array(
                             mri_slices_tumor_masks[s][mri_type])
 
-                        mri_slices_tumor_masks_validated[s][mri_type] = seg.validate_masks(
-                            raw_slices[s][mri_type], raw_slices_masks[s][mri_type])
+                        if 'T1C' in mri_type or 'T1' in mri_type:
+                            print("\tValidation for MRI type " +
+                                  mri_type.upper())
+                            mri_slices_tumor_masks_validated[s][mri_type] = seg.validate_masks(
+                                raw_slices[s][mri_type], raw_slices_masks[s][mri_type], 1)
+
+                        if 'FLAIR' in mri_type or 'T2' in mri_type:
+                            print("\ttValidation for MRI type " +
+                                  mri_type.upper())
+                            mri_slices_tumor_masks_validated[s][mri_type] = seg.validate_masks(
+                                raw_slices[s][mri_type], raw_slices_masks[s][mri_type], 0)
+
                         mri_slices_segmented[s][mri_type] = [seg*val for seg, val in zip(
-                            raw_slices[s][mri_type], mri_slices_tumor_masks_validated[s][mri_type])]
+                            mri_slices_dicom[s][mri_type], mri_slices_tumor_masks_validated[s][mri_type])]
 
                         subject_folder = os.path.join(
                             dataset_path, s, mri_type)
@@ -301,7 +311,7 @@ def create_and_save_contours(dataset_no_skull, dataset_segmentation_masks, datas
 
     database_masks = os.path.join(os.path.dirname(
         os.path.abspath(__file__)), dataset_segmentation_masks)
-    subjects = dicom_handler.get_subject_list(database_masks)
+    subjects = dicom_handler.get_subject_list(dataset_path)
 
     # Create directory
     if not os.path.exists(dataset_segmentation_contours):
@@ -319,7 +329,7 @@ def create_and_save_contours(dataset_no_skull, dataset_segmentation_masks, datas
             found_mri_types = os.listdir(os.path.join(database_masks, s))
             found_mri_types = found_mri_types[::-1]
 
-            for mri_type in os.listdir(os.path.join(dataset_path, s)):
+            for mri_type in os.listdir(os.path.join(database_masks, s)):
                 if mri_type in img_types:
                     mri_slices_dicom[s][mri_type] = dicom_handler.load_subject_scan(
                         os.path.join(dataset_path, s, mri_type))
@@ -446,15 +456,15 @@ if __name__ == "__main__":
     ##############################################################
     ################# SEGMENT TUMOR AND EDEMA ####################
     tumor_and_edema_segmentation(dataset_no_skull, dataset_segmentation,
-                                 dataset_segmentation_masks, dataset_segmentation_masks_validated)
+        dataset_segmentation_masks, dataset_segmentation_masks_validated)
     ##############################################################
     ###################### VALIDATE MASKS ########################
     mask_validation(dataset_no_skull, dataset_segmentation_masks,
-                    dataset_segmentation_masks_validated, dataset_segmentation)
+        dataset_segmentation_masks_validated, dataset_segmentation)
     ##############################################################
     ################ CREATE AND SAVE CONTOURS ####################
     create_and_save_contours(
-        dataset_no_skull, dataset_segmentation_masks, dataset_segmentation_contours)
+        dataset_no_skull, dataset_segmentation_masks_validated, dataset_segmentation_contours)
     ##############################################################
     ################ EXTRACT FEATURES ############################
     extract_features(dataset_features, dataset_segmentation,
