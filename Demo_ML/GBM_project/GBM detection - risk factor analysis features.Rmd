@@ -40,7 +40,7 @@ dataset_images_12month$gender <- as.factor(dataset_images_12month$gender)
 Hay que cargar el fichero CSV creado a partir de las características extraidas de las imágenes y unirlo con el dataset de los factores de riesgo usando el ID de los pacientes. Además, como no se disponen imágenes de todos los pacientes, se eliminarán aquellos pacientes de los que solo se dispongan metadatos. Se cambia la forma en la que estaban representados los NA en el CSV de las características para que coincida con el dataset de los factores de riesgo.
 
 ```{r}
-filename <- "features/features_07_06.csv"
+filename <- "features/features.csv"
 dataset_features <- read.csv(filename, header=TRUE)
 dataset_features[dataset_features == "NaN"] <- NA
 ```
