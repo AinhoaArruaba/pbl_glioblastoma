@@ -450,25 +450,25 @@ if __name__ == "__main__":
     #################### MRI PRE-PROCESSING ######################
     print('############ PRE-PROCESSING ############')
     # DATASET STANDARIZATION
-    dataset_standarization(dataset, dataset_stand)
+    #dataset_standarization(dataset, dataset_stand)
     # SKULL EXTRACTION
     skull_extraction(dataset_stand, dataset_no_skull)
     ##############################################################
     ################# SEGMENT TUMOR AND EDEMA ####################
-    tumor_and_edema_segmentation(dataset_no_skull, dataset_segmentation,
-        dataset_segmentation_masks, dataset_segmentation_masks_validated)
+    #tumor_and_edema_segmentation(dataset_no_skull, dataset_segmentation,
+     #   dataset_segmentation_masks, dataset_segmentation_masks_validated)
     ##############################################################
     ###################### VALIDATE MASKS ########################
-    mask_validation(dataset_no_skull, dataset_segmentation_masks,
-        dataset_segmentation_masks_validated, dataset_segmentation)
+    #mask_validation(dataset_no_skull, dataset_segmentation_masks,
+     #   dataset_segmentation_masks_validated, dataset_segmentation)
     ##############################################################
     ################ CREATE AND SAVE CONTOURS ####################
-    create_and_save_contours(
-        dataset_no_skull, dataset_segmentation_masks_validated, dataset_segmentation_contours)
+    #create_and_save_contours(
+     #   dataset_no_skull, dataset_segmentation_masks_validated, dataset_segmentation_contours)
     ##############################################################
     ################ EXTRACT FEATURES ############################
-    extract_features(dataset_features, dataset_segmentation,
-                     dataset_segmentation_masks_validated, dataset_stand)
+    #extract_features(dataset_features, dataset_segmentation,
+     #                dataset_segmentation_masks_validated, dataset_stand)
     print("#### GBM TUMOR DETECTION AND FEATURE EXTRACTION PROCESS FINISHED ####")
     print('\tThe detected tumor/edema can be observed in /dataset_segmentation_contours')
     print('\tThe resulting extracted features are stored in /dataset_features')
